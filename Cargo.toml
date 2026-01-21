@@ -1,0 +1,11 @@
+[package]
+name = "gui_for_surround_sound"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.33.3"
+env_logger = "0.11.8"
+dirs = "6.0.0"
+anyhow = "1.0.100"
+log = "0.4.29"
