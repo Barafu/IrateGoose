@@ -128,5 +128,5 @@ The resulting binary is self-contained with all necessary texts compiled in. No 
 
 ### Testing
 - Do not write tests unless explicitly instructed to do so
-- Running `cargo check` without errors is enough to verify for syntax errors
+- To verify for code errors, run `cargo check`. Do not run `cargo build` afterwards only to check for errors. 
 

@@ -1473,6 +1473,7 @@ dependencies = [
  "env_logger",
  "log",
  "rayon",
+ "regex",
 ]
 
 [[package]]

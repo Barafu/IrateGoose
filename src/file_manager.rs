@@ -1,6 +1,10 @@
-use std::{fs, path::{Path, PathBuf}};
 use anyhow::Result;
 use rayon::prelude::*;
+use std::io::Read;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub struct FileManager {
     wavefile_dir: PathBuf,
@@ -21,6 +25,7 @@ pub enum WaveSampleRate {
     F44100,
     #[default]
     Unknown,
+    Damaged,
 }
 
 impl FileManager {
@@ -32,8 +37,8 @@ impl FileManager {
         f.rescan_folder()?;
         Ok(f)
     }
- 
-    /// Searches for WAV files inside the wavefile_dir, and read info from the files it found. 
+
+    /// Searches for WAV files inside the wavefile_dir, and read info from the files it found.
     pub fn rescan_folder(&mut self) -> Result<()> {
         // Detect WAV files
         self.wave_data.clear();
@@ -41,7 +46,6 @@ impl FileManager {
         self.scan_folder(&w)?;
 
         // Detect sample rates
-        rayon::ThreadPoolBuilder::new().num_threads(2).build_global().unwrap();
         self.wave_data.par_iter_mut().for_each(|wave| {
             wave.sample_rate = Self::detect_sample_rate(&wave.path);
         });
@@ -50,19 +54,20 @@ impl FileManager {
         self.wave_data.sort_by(|a, b| {
             let a_is_hesuvi = a.path.to_string_lossy().contains("HeSuVi/");
             let b_is_hesuvi = b.path.to_string_lossy().contains("HeSuVi/");
-            
+
             match (a_is_hesuvi, b_is_hesuvi) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => a.path.cmp(&b.path), // both HeSuVi or both non-HeSuVi
             }
         });
-        
+
         self.wave_data.shrink_to_fit();
         Ok(())
     }
 
-    pub fn relative_paths(&self) -> Vec<PathBuf> {
+    /// Creates a list of relative paths to all detected WAV files
+    pub fn list_relative_paths(&self) -> Vec<PathBuf> {
         self.wave_data
             .iter()
             .map(|wave| {
@@ -79,25 +84,38 @@ impl FileManager {
     }
 
     fn detect_sample_rate(path: &Path) -> WaveSampleRate {
-        let output = match std::process::Command::new("file")
-            .arg(path)
-            .output()
-        {
-            Ok(output) if output.status.success() => output,
-            _ => return WaveSampleRate::Unknown,
+        // return WaveSampleRate::Damaged; // Uncomment for debug
+        // Open the file
+        let mut file = match std::fs::File::open(path) {
+            Ok(file) => file,
+            Err(_) => return WaveSampleRate::Damaged,
         };
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.contains("44100") {
-            WaveSampleRate::F44100
-        } else if stdout.contains("48000") {
-            WaveSampleRate::F48000
-        } else {
-            WaveSampleRate::Unknown
+
+        // Read at least 28 bytes to get the sample rate at offset 24-27
+        let mut buffer = [0u8; 28];
+        match file.read_exact(&mut buffer) {
+            Ok(_) => (),
+            Err(_) => return WaveSampleRate::Damaged,
+        }
+
+        // Verify WAV header
+        // Bytes 0-3 should be "RIFF", bytes 8-11 should be "WAVE"
+        if &buffer[0..4] != b"RIFF" || &buffer[8..12] != b"WAVE" {
+            return WaveSampleRate::Damaged;
+        }
+
+        // Extract sample rate from bytes 24-27 (little-endian u32)
+        let sample_rate = u32::from_le_bytes([buffer[24], buffer[25], buffer[26], buffer[27]]);
+
+        // Match to known sample rates
+        match sample_rate {
+            44100 => WaveSampleRate::F44100,
+            48000 => WaveSampleRate::F48000,
+            _ => WaveSampleRate::Unknown,
         }
     }
 
-    fn scan_folder(&mut self, path: &Path) -> Result<()>
-    {
+    fn scan_folder(&mut self, path: &Path) -> Result<()> {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
@@ -122,8 +140,7 @@ impl FileManager {
                     sample_rate: WaveSampleRate::Unknown,
                 });
             }
-        };
+        }
         Ok(())
-
     }
 }

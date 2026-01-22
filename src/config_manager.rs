@@ -13,8 +13,12 @@ impl ConfigManager {
     const CONFIG_TEMPLATE: &'static str = include_str!("../sink_template.conf");
 
     /// The last part of the config path
+    /// Uses /tmp/surround.conf in debug builds for testing
+    /// Uses the real PipeWire config path in release builds
+    #[cfg(debug_assertions)]
     const CONFIG_SUFFIX: &'static str = "/tmp/surround.conf";
-    // const CONFIG_SUFFIX: &'static str = "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf";
+    #[cfg(not(debug_assertions))]
+    const CONFIG_SUFFIX: &'static str = "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf";
 
     /// Creates a new ConfigManager instance
     pub fn new() -> Result<ConfigManager> {
@@ -59,9 +63,42 @@ impl ConfigManager {
         Ok(())
     }
     
-    /// Checks if the config file exists
-    pub fn config_exists(&self) -> bool {
-        self.config_path.exists()
+    /// Checks if the config file exists and returns the wavefile path if found
+    /// Returns Ok(Some(PathBuf)) if config exists and contains a valid filename
+    /// Returns Ok(None) if config file does not exist
+    /// Returns Err(String) if config exists but cannot be read or parsed
+    pub fn config_exists(&self) -> Result<Option<PathBuf>, String> {
+        if !self.config_path.exists() {
+            return Ok(None);
+        }
+        
+        // Read the config file
+        let content = fs::read_to_string(&self.config_path)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        
+        // Search for filename pattern in the config
+        Self::extract_filename_from_config(&content)
+            .map(Some)
+            .map_err(|e| format!("Failed to parse config: {}", e))
+    }
+    
+    /// Extracts the filename from config content
+    /// Looks for pattern: filename = "PATH" (with optional spaces)
+    fn extract_filename_from_config(content: &str) -> Result<PathBuf, String> {
+        // Search for filename = "..." pattern
+        // The pattern could be: filename = "/path/to/file.wav"
+        // or: filename = "/home/barafu/Scripts/Surround_WAV/HeSuVi/Common/cmss_ent-/cmss_ent-.wav"
+        let re = regex::Regex::new(r#"filename\s*=\s*"([^"]+)"#)
+            .map_err(|e| format!("Failed to compile regex: {}", e))?;
+            
+        if let Some(captures) = re.captures(content) {
+            if let Some(filename_match) = captures.get(1) {
+                let filename = filename_match.as_str();
+                return Ok(PathBuf::from(filename));
+            }
+        }
+        
+        Err("No filename found in config".to_string())
     }
 
     /// Restarts the PipeWire services to apply configuration changes.
