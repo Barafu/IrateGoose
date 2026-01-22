@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::process::Command;
 use anyhow::{Context, Result, anyhow};
 
 pub struct ConfigManager {
@@ -27,12 +28,7 @@ impl ConfigManager {
             config_path,
         })
     }
-    
-    /// Returns the full config path
-    pub fn config_path(&self) -> &Path {
-        &self.config_path
-    }
-    
+        
     /// Writes the updated configuration to the config path
     pub fn write_config(&self, wavefile_path: &Path) -> Result<()> {
         //Create text for config file
@@ -46,6 +42,9 @@ impl ConfigManager {
         fs::write(&self.config_path, config_text)
             .with_context(|| format!("Failed to write config to {}", self.config_path.display()))?;
         
+        // Restart services to apply the new config
+        self.apply_config()?;
+        
         Ok(())
     }
     
@@ -55,11 +54,31 @@ impl ConfigManager {
             fs::remove_file(&self.config_path)
                 .with_context(|| format!("Failed to delete config file {}", self.config_path.display()))?;
         }
+        // Restart services to apply the removal
+        self.apply_config()?;
         Ok(())
     }
     
     /// Checks if the config file exists
     pub fn config_exists(&self) -> bool {
         self.config_path.exists()
+    }
+
+    /// Restarts the PipeWire services to apply configuration changes.
+    fn apply_config(&self) -> Result<()> {
+        let output = Command::new("systemctl")
+            .args(["--user", "restart", "wireplumber", "pipewire", "pipewire-pulse"])
+            .output()
+            .with_context(|| "Failed to execute systemctl command")?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            match output.status.code() {
+                Some(5) => Ok(()), // unit not loaded is fine
+                Some(code) => Err(anyhow!("systemctl failed with exit code {}", code)),
+                None => Err(anyhow!("systemctl terminated by signal")),
+            }
+        }
     }
 }

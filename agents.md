@@ -125,3 +125,8 @@ Use one of these approaches:
 
 ### Distribution
 The resulting binary is self-contained with all necessary texts compiled in. No additional resource files are required for deployment.
+
+### Testing
+- Do not write tests unless explicitly instructed to do so
+- Running `cargo check` without errors is enough to verify for syntax errors
+

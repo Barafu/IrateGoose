@@ -9,7 +9,6 @@ use log::error;
 use app_gui::AppGUI;
 use file_manager::FileManager;
 use config_manager::ConfigManager;
-use eframe::egui;
 
 // UI texts
 const NO_WAVEFILE_PATH: &str = "Could not determine path to wave files";
