@@ -189,6 +189,11 @@ impl<'a> eframe::App for AppGUI<'a> {
                     WaveSampleRate::F44100,
                     "44100",
                 );
+                ui.radio_value(
+                    &mut self.sample_rate_filter,
+                    WaveSampleRate::F96000,
+                    "96000",
+                );
                 ui.radio_value(&mut self.sample_rate_filter, WaveSampleRate::Unknown, "All");
 
                 // Check if filter changed
@@ -199,6 +204,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                         let matches = match self.sample_rate_filter {
                             WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
                             WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
+                            WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
                             _ => true,
                         };
                         if !matches {
@@ -219,6 +225,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                         let matches = match self.sample_rate_filter {
                             WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
                             WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
+                            WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
                             _ => true,
                         };
                         if !matches {
@@ -245,7 +252,7 @@ impl<'a> eframe::App for AppGUI<'a> {
 
                     // If no files are found, show a message
                     if !any_displayed {
-                        ui.label("No .wav files found in the directory.");
+                        ui.label("No .wav files matching this filter were found in the directory.");
                     }
                 });
         });

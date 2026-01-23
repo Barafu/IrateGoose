@@ -23,6 +23,7 @@ pub struct WaveFileData {
 pub enum WaveSampleRate {
     F48000,
     F44100,
+    F96000,
     #[default]
     Unknown,
     Damaged,
@@ -111,6 +112,7 @@ impl FileManager {
         match sample_rate {
             44100 => WaveSampleRate::F44100,
             48000 => WaveSampleRate::F48000,
+            96000 => WaveSampleRate::F96000,
             _ => WaveSampleRate::Unknown,
         }
     }
