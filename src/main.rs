@@ -3,15 +3,16 @@ mod config_manager;
 mod descriptions;
 mod file_manager;
 
+use clap::Parser;
 use eframe::egui::{Style, Visuals};
 use log::error;
 use std::process::Command;
-use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{env, path::PathBuf, process};
 
+use crate::descriptions::Descriptions;
 use app_gui::AppGUI;
 use config_manager::ConfigManager;
-use crate::descriptions::Descriptions;
 use file_manager::FileManager;
 
 // UI texts
@@ -19,27 +20,41 @@ const NO_WAVEFILE_PATH: &str = "Could not determine path to wave files";
 
 /// Global development mode flag
 /// True in debug builds, false in release builds
-static DEV_MODE: LazyLock<bool> = LazyLock::new(|| {
-    cfg!(debug_assertions)
-});
+static DEV_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
+
+/// Command line arguments
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct CliArgs {
+    /// Path to directory containing WAV files
+    #[arg(value_name = "PATH")]
+    path: Option<PathBuf>,
+
+    /// Dry-run mode (hidden),makes app to write Pipewire config in /tmp instead of proper placement.
+    #[arg(long, hide = true)]
+    dry_run: bool,
+}
 
 fn main() {
     // Initialise logger
     env_logger::init();
 
-    // CLI
+    // Parse CLI arguments
+    let args = CliArgs::parse();
 
-    //Determine path to search for wave files
-    let working_dir = env::current_dir().ok();
-    let given_wavefiles_path = env::args().nth(1).map(|s| PathBuf::from(s));
-    let wavefiles_path;
-    match given_wavefiles_path.or(working_dir) {
-        Some(v) => wavefiles_path = v,
-        None => {
+    // Override DEV_MODE if dry_run is true
+    if args.dry_run {
+        DEV_MODE.store(true, Ordering::Relaxed);
+    }
+
+    // Determine path to search for wave files
+    let wavefiles_path = args
+        .path
+        .or_else(|| env::current_dir().ok())
+        .unwrap_or_else(|| {
             show_warning(NO_WAVEFILE_PATH);
             panic!("{NO_WAVEFILE_PATH}")
-        }
-    }
+        });
 
     // File manager, scans for WAV files.
     let mut file_manager;

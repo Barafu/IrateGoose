@@ -14,3 +14,10 @@ regex = "1.11.0"
 zstd = "0.13.3"
 csv = "1.3.0"
 egui_extras = "0.33.3"
+clap = { version = "4.5.54", features = ["derive", "unicode"] }
+
+[profile.release]
+strip = true #Remove extra symbols
+opt-level = "s" #Optimize for size
+lto = true #Enable linker optimizations
+codegen-units=1 #Maximise optimizations

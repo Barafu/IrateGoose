@@ -20,7 +20,7 @@ impl ConfigManager {
         // Determine config suffix based on DEV_MODE
         // Uses /tmp/surround.conf in dev mode for testing
         // Uses the real PipeWire config path in production mode
-        let config_suffix = if *crate::DEV_MODE {
+        let config_suffix = if crate::DEV_MODE.load(std::sync::atomic::Ordering::Relaxed) {
             "/tmp/surround.conf"
         } else {
             "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf"
@@ -106,7 +106,7 @@ impl ConfigManager {
     /// Does nothing when in dev mode.
     fn apply_config(&self) -> Result<()> {
         // In dev mode, skip restarting services
-        if *crate::DEV_MODE {
+        if crate::DEV_MODE.load(std::sync::atomic::Ordering::Relaxed) {
             return Ok(());
         }
         
