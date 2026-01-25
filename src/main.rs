@@ -6,6 +6,7 @@ mod file_manager;
 use eframe::egui::{Style, Visuals};
 use log::error;
 use std::process::Command;
+use std::sync::LazyLock;
 use std::{env, path::PathBuf, process};
 
 use app_gui::AppGUI;
@@ -15,6 +16,12 @@ use file_manager::FileManager;
 
 // UI texts
 const NO_WAVEFILE_PATH: &str = "Could not determine path to wave files";
+
+/// Global development mode flag
+/// True in debug builds, false in release builds
+static DEV_MODE: LazyLock<bool> = LazyLock::new(|| {
+    cfg!(debug_assertions)
+});
 
 fn main() {
     // Initialise logger

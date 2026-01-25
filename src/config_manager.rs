@@ -12,21 +12,22 @@ impl ConfigManager {
     /// The config file template
     const CONFIG_TEMPLATE: &'static str = include_str!("../sink_template.conf");
 
-    /// The last part of the config path
-    /// Uses /tmp/surround.conf in debug builds for testing
-    /// Uses the real PipeWire config path in release builds
-    #[cfg(debug_assertions)]
-    const CONFIG_SUFFIX: &'static str = "/tmp/surround.conf";
-    #[cfg(not(debug_assertions))]
-    const CONFIG_SUFFIX: &'static str = "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf";
-
     /// Creates a new ConfigManager instance
     pub fn new() -> Result<ConfigManager> {
         // Determine the full path to the current user's ~/.config folder
         let config_dir = dirs::config_dir().ok_or(anyhow!("Could not determine home directory"))?;
         
+        // Determine config suffix based on DEV_MODE
+        // Uses /tmp/surround.conf in dev mode for testing
+        // Uses the real PipeWire config path in production mode
+        let config_suffix = if *crate::DEV_MODE {
+            "/tmp/surround.conf"
+        } else {
+            "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf"
+        };
+        
         // Append the config suffix to get the full absolute path
-        let config_path = config_dir.join(Self::CONFIG_SUFFIX);
+        let config_path = config_dir.join(config_suffix);
         
         Ok(Self {
             config_path,
@@ -102,7 +103,13 @@ impl ConfigManager {
     }
 
     /// Restarts the PipeWire services to apply configuration changes.
+    /// Does nothing when in dev mode.
     fn apply_config(&self) -> Result<()> {
+        // In dev mode, skip restarting services
+        if *crate::DEV_MODE {
+            return Ok(());
+        }
+        
         let output = Command::new("systemctl")
             .args(["--user", "restart", "wireplumber", "pipewire", "pipewire-pulse"])
             .output()
