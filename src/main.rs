@@ -72,26 +72,26 @@ fn main() {
     }
 
     // Config manager, writes and deletes the PipeWire config
-    let config_manager;
-    match ConfigManager::new() {
-        Ok(v) => config_manager = v,
+    
+    let config_manager = match ConfigManager::new() {
+        Ok(v) => v,
         Err(e) => {
             let err = format!("Can not process config file. Reason: {e}");
             show_warning(&err);
             process::exit(1);
         }
-    }
+    };
 
     // Descriptions, loads HRTF descriptions from embedded CSV
-    let descriptions;
-    match Descriptions::new() {
-        Ok(v) => descriptions = v,
+    
+    let descriptions = match Descriptions::new() {
+        Ok(v) => v,
         Err(e) => {
             let err = format!("Can not load HRTF descriptions. Reason: {e}");
             show_warning(&err);
             process::exit(1);
         }
-    }
+    };
 
     // EGUI style - detect system theme
     let visuals = match Command::new("gsettings")

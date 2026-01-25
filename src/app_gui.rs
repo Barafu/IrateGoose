@@ -331,11 +331,10 @@ impl<'a> AppGUI<'a> {
             .collect();
 
         // If selected file is no longer visible, deselect it
-        if let Some(selected_idx) = self.selected_index {
-            if !filtered_items.contains(&selected_idx) {
+        if let Some(selected_idx) = self.selected_index
+            && !filtered_items.contains(&selected_idx) {
                 self.selected_index = None;
             }
-        }
 
         if filtered_items.is_empty() {
             ui.label("No .wav files matching this filter were found in the directory.");

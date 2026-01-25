@@ -92,12 +92,11 @@ impl ConfigManager {
         let re = regex::Regex::new(r#"filename\s*=\s*"([^"]+)"#)
             .map_err(|e| format!("Failed to compile regex: {}", e))?;
             
-        if let Some(captures) = re.captures(content) {
-            if let Some(filename_match) = captures.get(1) {
+        if let Some(captures) = re.captures(content)
+            && let Some(filename_match) = captures.get(1) {
                 let filename = filename_match.as_str();
                 return Ok(PathBuf::from(filename));
             }
-        }
         
         Err("No filename found in config".to_string())
     }
