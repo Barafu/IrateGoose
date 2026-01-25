@@ -155,7 +155,104 @@ impl<'a> AppGUI<'a> {
         format!("{}...", truncated.trim_end())
     }
 
-    /// Renders the file list table and HRTF metadata frame.
+    /// Renders the file table with two columns: "Files" and "Description".
+    fn render_file_table(&mut self, ui: &mut egui::Ui, filtered_items: Vec<usize>) {
+        // Wrap the table in its own frame
+        let table_frame = egui::Frame::group(ui.style());
+        table_frame.show(ui, |ui| {
+            // Create a two-column table using rows() for better performance
+            let row_height = 20.0;
+            let num_rows = filtered_items.len();
+            let available_width = ui.available_width();
+            TableBuilder::new(ui)
+                .column(Column::initial(available_width * 0.6)) // "Files" column - auto width
+                .column(Column::remainder().clip(true)) // "Description" column - takes remaining width
+                .max_scroll_height(300.0)
+                .auto_shrink([false, true])
+                .resizable(true)
+                .striped(true)
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.heading("Files");
+                    });
+                    header.col(|ui| {
+                        ui.heading("Description");
+                    });
+                })
+                .body(|body| {
+                    // Table rows are generated here
+                    body.rows(row_height, num_rows, |mut row| {
+                        let row_index = row.index();
+                        let index = filtered_items[row_index];
+                        let rel_path = &self.relative_paths[index];
+                        let wave = &self.file_manager.wave_data[index];
+                        let is_selected = self.selected_index == Some(index);
+                        let mut label_text = rel_path.to_string_lossy().to_string();
+
+                        // Get HRTF metadata for this file (cheap lookup)
+                        let description_text = self
+                            .file_manager
+                            .absolute_path(index)
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .and_then(|stem| self.descriptions.get(stem))
+                            .map(|metadata| {
+                                // Take first line of description, fallback to empty string
+                                metadata
+                                    .description
+                                    .lines()
+                                    .next()
+                                    .unwrap_or("")
+                                    .trim()
+                                    .to_string()
+                            })
+                            .unwrap_or_default();
+
+                        if wave.sample_rate == WaveSampleRate::Damaged {
+                            label_text.insert_str(0, "(Damaged)");
+                            row.col(|ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(label_text).color(egui::Color32::GRAY),
+                                    )
+                                    .truncate(),
+                                );
+                            });
+                            row.col(|ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(description_text)
+                                            .color(egui::Color32::GRAY),
+                                    )
+                                    .truncate(),
+                                );
+                            });
+                        } else {
+                            row.col(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Button::selectable(is_selected, label_text)
+                                            .wrap_mode(egui::TextWrapMode::Truncate),
+                                    )
+                                    .clicked()
+                                {
+                                    self.selected_index = Some(index);
+                                }
+                            });
+                            row.col(|ui| {
+                                ui.add(
+                                    egui::Label::new(description_text)
+                                        .truncate()
+                                        .selectable(false),
+                                );
+                            });
+                        }
+                    });
+                });
+        });
+    }
+
+    /// Renders the file list table with two columns: "Files" and "Description".
     fn render_file_list_and_metadata(&mut self, ui: &mut egui::Ui) {
         ui.heading("Registered Wave Files");
 
@@ -200,16 +297,16 @@ impl<'a> AppGUI<'a> {
 
         // Search field
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.search_text)
-                .hint_text("Search wav files..."));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search_text).hint_text("Search wav files..."),
+            );
             if ui.button("Clear").clicked() {
                 self.search_text.clear();
             }
         });
 
-        // Create a table for the file list
-        // Collect filtered items
-        let filtered_items: Vec<(usize, &PathBuf)> = self
+        // Collect filtered items (indices only)
+        let filtered_items: Vec<usize> = self
             .relative_paths
             .iter()
             .enumerate()
@@ -230,11 +327,12 @@ impl<'a> AppGUI<'a> {
                 };
                 sample_rate_ok && search_ok
             })
+            .map(|(index, _)| index)
             .collect();
 
         // If selected file is no longer visible, deselect it
         if let Some(selected_idx) = self.selected_index {
-            if !filtered_items.iter().any(|(idx, _)| *idx == selected_idx) {
+            if !filtered_items.contains(&selected_idx) {
                 self.selected_index = None;
             }
         }
@@ -242,37 +340,8 @@ impl<'a> AppGUI<'a> {
         if filtered_items.is_empty() {
             ui.label("No .wav files matching this filter were found in the directory.");
         } else {
-            TableBuilder::new(ui)
-                .column(Column::remainder())
-                .max_scroll_height(300.0)
-                .auto_shrink([true, true])
-                .resizable(true)
-                .striped(true)
-                .body(|mut body| {
-                    for (index, rel_path) in filtered_items {
-                        let wave = &self.file_manager.wave_data[index];
-                        let is_selected = self.selected_index == Some(index);
-                        let mut label_text = rel_path.to_string_lossy().to_string();
-
-                        if wave.sample_rate == WaveSampleRate::Damaged {
-                            label_text.insert_str(0, "(Damaged)");
-                            body.row(20.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.colored_label(egui::Color32::GRAY, label_text);
-                                });
-                            });
-                        } else {
-                            body.row(20.0, |mut row| {
-                                row.col(|ui| {
-                                    if ui.selectable_label(is_selected, label_text).clicked() {
-                                        self.selected_index = Some(index);
-                                    }
-                                });
-                            });
-                        }
-                    }
-                });
-            // HRTF metadata frame
+            self.render_file_table(ui, filtered_items);
+            // HRTF metadata frame (detailed view for selected file)
             ui.separator();
             ui.heading("HRTF Metadata");
             let frame = egui::Frame::group(ui.style());
@@ -335,7 +404,6 @@ impl<'a> eframe::App for AppGUI<'a> {
                     ui.label("No config installed");
                 }
             }
-
 
             ui.separator();
             self.render_file_list_and_metadata(ui);
