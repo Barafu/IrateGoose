@@ -10,7 +10,6 @@ This is a Rust GUI application for configuring surround sound capabilities with 
 - **Language**: Rust
 - **Framework**: eframe/egui for the GUI
 - **Purpose**: Configure surround sound capabilities of Pipewire
-- **Repository**: Located at `/home/barafu/Coding/Rust/GUI_for_surround_sound`
 
 ## Application Architecture
 
@@ -40,12 +39,7 @@ This is a Rust GUI application for configuring surround sound capabilities with 
    - Handles writing, deleting, and checking configuration files
    - Replaces template placeholders with actual WAV file paths
 
-### Key Features
 
-- Graphical file browser for WAV files
-- Selectable file list with scrollable interface
-- Apply button for selected configurations
-- Error handling for missing files/directories
 
 ## Platform Requirements
 
@@ -65,50 +59,11 @@ The application has the following platform-specific requirements:
 - The application is designed for Linux Pipewire environments
 - No support for Windows or macOS is planned
 - Requires standard Linux desktop environment for GUI rendering
-- May have dependencies on specific Linux audio APIs
 
 ## Template Texts and Compilation
 
 ### Text Compilation Strategy
 **All template texts should be compiled into the binary itself.**
-
-This approach provides several benefits:
-
-1. **Performance**: No runtime file I/O for text resources
-2. **Portability**: Single binary deployment
-3. **Security**: Reduced attack surface from external files
-4. **Reliability**: No missing resource file errors
-
-### Implementation Details
-
-Texts are compiled using Rust's `const` declarations:
-
-```rust
-// Example from main.rs
-const NO_WAVEFILE_PATH: &str = "Could not determine path to wave files";
-```
-
-### Text Resources to Include
-
-The following texts should be compiled into the binary:
-
-1. **UI Labels and Headings**
-   - Window titles
-   - Button labels
-   - Section headers
-   - Status messages
-
-2. **Error Messages**
-   - File system errors
-   - Audio configuration errors
-   - User input validation errors
-
-3. **Help and Documentation**
-   - Tooltips
-   - Status bar messages
-   - Dialog box content
-
-### Compilation Method
 
 Use one of these approaches:
 

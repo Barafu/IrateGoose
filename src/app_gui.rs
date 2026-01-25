@@ -1,6 +1,6 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::config_manager::ConfigManager;
 use crate::descriptions::Descriptions;
@@ -16,6 +16,7 @@ pub struct AppGUI<'a> {
     sample_rate_filter: WaveSampleRate,
     config_installed: Option<PathBuf>,
     status_message: String,
+    search_text: String,
 }
 
 enum MessageLevel {
@@ -45,6 +46,7 @@ impl<'a> AppGUI<'a> {
             sample_rate_filter,
             config_installed,
             status_message: String::new(),
+            search_text: String::new(),
         }
     }
 
@@ -152,6 +154,145 @@ impl<'a> AppGUI<'a> {
         let truncated = &description[..MAX_LEN - 3];
         format!("{}...", truncated.trim_end())
     }
+
+    /// Renders the file list table and HRTF metadata frame.
+    fn render_file_list_and_metadata(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Registered Wave Files");
+
+        // Radio buttons for sample rate filter
+        ui.horizontal(|ui| {
+            ui.label("Sample rate:");
+            let old_filter = self.sample_rate_filter;
+            ui.radio_value(
+                &mut self.sample_rate_filter,
+                WaveSampleRate::F48000,
+                "48000",
+            );
+            ui.radio_value(
+                &mut self.sample_rate_filter,
+                WaveSampleRate::F44100,
+                "44100",
+            );
+            ui.radio_value(
+                &mut self.sample_rate_filter,
+                WaveSampleRate::F96000,
+                "96000",
+            );
+            ui.radio_value(&mut self.sample_rate_filter, WaveSampleRate::Unknown, "All");
+
+            // Check if filter changed
+            if old_filter != self.sample_rate_filter {
+                // If a file is selected, check if it's still visible with the new filter
+                if let Some(index) = self.selected_index {
+                    let wave = &self.file_manager.wave_data[index];
+                    let matches = match self.sample_rate_filter {
+                        WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
+                        WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
+                        WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
+                        _ => true,
+                    };
+                    if !matches {
+                        self.selected_index = None;
+                    }
+                }
+            }
+        });
+
+        // Search field
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut self.search_text)
+                .hint_text("Search wav files..."));
+            if ui.button("Clear").clicked() {
+                self.search_text.clear();
+            }
+        });
+
+        // Create a table for the file list
+        // Collect filtered items
+        let filtered_items: Vec<(usize, &PathBuf)> = self
+            .relative_paths
+            .iter()
+            .enumerate()
+            .filter(|(index, rel_path)| {
+                let wave = &self.file_manager.wave_data[*index];
+                let sample_rate_ok = match self.sample_rate_filter {
+                    WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
+                    WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
+                    WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
+                    _ => true,
+                };
+                let search_ok = if self.search_text.is_empty() {
+                    true
+                } else {
+                    let search_lower = self.search_text.to_lowercase();
+                    let path_lower = rel_path.to_string_lossy().to_lowercase();
+                    path_lower.contains(&search_lower)
+                };
+                sample_rate_ok && search_ok
+            })
+            .collect();
+
+        // If selected file is no longer visible, deselect it
+        if let Some(selected_idx) = self.selected_index {
+            if !filtered_items.iter().any(|(idx, _)| *idx == selected_idx) {
+                self.selected_index = None;
+            }
+        }
+
+        if filtered_items.is_empty() {
+            ui.label("No .wav files matching this filter were found in the directory.");
+        } else {
+            TableBuilder::new(ui)
+                .column(Column::remainder())
+                .max_scroll_height(300.0)
+                .auto_shrink([true, true])
+                .resizable(true)
+                .striped(true)
+                .body(|mut body| {
+                    for (index, rel_path) in filtered_items {
+                        let wave = &self.file_manager.wave_data[index];
+                        let is_selected = self.selected_index == Some(index);
+                        let mut label_text = rel_path.to_string_lossy().to_string();
+
+                        if wave.sample_rate == WaveSampleRate::Damaged {
+                            label_text.insert_str(0, "(Damaged)");
+                            body.row(20.0, |mut row| {
+                                row.col(|ui| {
+                                    ui.colored_label(egui::Color32::GRAY, label_text);
+                                });
+                            });
+                        } else {
+                            body.row(20.0, |mut row| {
+                                row.col(|ui| {
+                                    if ui.selectable_label(is_selected, label_text).clicked() {
+                                        self.selected_index = Some(index);
+                                    }
+                                });
+                            });
+                        }
+                    }
+                });
+            // HRTF metadata frame
+            ui.separator();
+            ui.heading("HRTF Metadata");
+            let frame = egui::Frame::group(ui.style());
+            frame.show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                if let Some(metadata) = self.selected_metadata() {
+                    ui.heading(&metadata.hrtf);
+                    ui.label(Self::truncate_description(&metadata.description));
+                    if !metadata.source.is_empty() {
+                        ui.label(format!("Source: {}", metadata.source));
+                    }
+                    if !metadata.credits.is_empty() {
+                        ui.label(format!("By: {}", metadata.credits));
+                    }
+                } else {
+                    ui.label("No description for the selected files.");
+                }
+            });
+        }
+    }
 }
 
 impl<'a> eframe::App for AppGUI<'a> {
@@ -166,16 +307,16 @@ impl<'a> eframe::App for AppGUI<'a> {
             // Determine if a file is selected
             let is_file_selected = self.selected_index.is_some();
 
-            // Add Write Config and Delete Config buttons
+            // Add the "Write Config" and the "Delete Config" buttons
             ui.horizontal(|ui| {
-                // Write config button should be disabled if no file is selected
+                // The "Write config" button should be disabled if no file is selected
                 let write_button =
                     ui.add_enabled(is_file_selected, egui::Button::new("Write config"));
                 if write_button.clicked() {
                     self.on_write_config_click();
                 }
 
-                // Delete config button should be disabled if config is not installed
+                // The "Delete config" button should be disabled if config is not installed
                 let delete_button = ui.add_enabled(
                     self.config_installed.is_some(),
                     egui::Button::new("Delete config"),
@@ -195,117 +336,9 @@ impl<'a> eframe::App for AppGUI<'a> {
                 }
             }
 
+
             ui.separator();
-            ui.heading("Registered Wave Files");
-
-            // Radio buttons for sample rate filter
-            ui.horizontal(|ui| {
-                ui.label("Sample rate:");
-                let old_filter = self.sample_rate_filter;
-                ui.radio_value(
-                    &mut self.sample_rate_filter,
-                    WaveSampleRate::F48000,
-                    "48000",
-                );
-                ui.radio_value(
-                    &mut self.sample_rate_filter,
-                    WaveSampleRate::F44100,
-                    "44100",
-                );
-                ui.radio_value(
-                    &mut self.sample_rate_filter,
-                    WaveSampleRate::F96000,
-                    "96000",
-                );
-                ui.radio_value(&mut self.sample_rate_filter, WaveSampleRate::Unknown, "All");
-
-                // Check if filter changed
-                if old_filter != self.sample_rate_filter {
-                    // If a file is selected, check if it's still visible with the new filter
-                    if let Some(index) = self.selected_index {
-                        let wave = &self.file_manager.wave_data[index];
-                        let matches = match self.sample_rate_filter {
-                            WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
-                            WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
-                            WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
-                            _ => true,
-                        };
-                        if !matches {
-                            self.selected_index = None;
-                        }
-                    }
-                }
-            });
-
-            // Create a table for the file list
-            // Collect filtered items
-            let filtered_items: Vec<(usize, &PathBuf)> = self
-                .relative_paths
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| {
-                    let wave = &self.file_manager.wave_data[*index];
-                    match self.sample_rate_filter {
-                        WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
-                        WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
-                        WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
-                        _ => true,
-                    }
-                })
-                .collect();
-
-            if filtered_items.is_empty() {
-                ui.label("No .wav files matching this filter were found in the directory.");
-            } else {
-                TableBuilder::new(ui)
-                    .column(Column::remainder())
-                    .max_scroll_height(300.0)
-                    .auto_shrink([true, true])
-                    .resizable(true)
-                    .striped(true)
-                    .body(|mut body| {
-                        for (index, rel_path) in filtered_items {
-                            let wave = &self.file_manager.wave_data[index];
-                            let is_selected = self.selected_index == Some(index);
-                            let mut label_text = rel_path.to_string_lossy().to_string();
-
-                            if wave.sample_rate == WaveSampleRate::Damaged {
-                                label_text.insert_str(0, "(Damaged)");
-                                body.row(20.0, |mut row| {
-                                    row.col(|ui| {
-                                        ui.colored_label(egui::Color32::GRAY, label_text);
-                                    });
-                                });
-                            } else {
-                                body.row(20.0, |mut row| {
-                                    row.col(|ui| {
-                                        if ui.selectable_label(is_selected, label_text).clicked() {
-                                            self.selected_index = Some(index);
-                                        }
-                                    });
-                                });
-                            }
-                        }
-                    });
-                // HRTF metadata frame
-                ui.separator();
-                ui.heading("HRTF Metadata");
-                let frame = egui::Frame::group(ui.style());
-                frame.show(ui, |ui| {
-                    if let Some(metadata) = self.selected_metadata() {
-                        ui.heading(&metadata.hrtf);
-                        ui.label(Self::truncate_description(&metadata.description));
-                        if !metadata.source.is_empty() {
-                            ui.label(format!("Source: {}", metadata.source));
-                        }
-                        if !metadata.credits.is_empty() {
-                            ui.label(format!("By: {}", metadata.credits));
-                        }
-                    } else {
-                        ui.label("No description for the selected files.");
-                    }
-                });
-            }
+            self.render_file_list_and_metadata(ui);
         });
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::BTreeMap;
 use anyhow::{Result, anyhow};
 use csv::ReaderBuilder;
