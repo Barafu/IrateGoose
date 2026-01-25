@@ -1,4 +1,4 @@
-# GUI for Surround Sound - Agent Documentation
+# IrateGoose - Agent Documentation
 
 ## Project Overview
 

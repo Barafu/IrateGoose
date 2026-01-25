@@ -100,7 +100,7 @@ fn main() {
 
     let eframe_options = eframe::NativeOptions::default();
     let _ = eframe::run_native(
-        "Surroud Sound Configurator",
+        "IrateGoose - Surround Sound Configurator",
         eframe_options,
         Box::new(|cc| {
             cc.egui_ctx.set_style(style);
@@ -122,7 +122,7 @@ fn show_warning(msg: &str) {
     let _ = Command::new("notify-send")
         .args([
             "--urgency=critical",
-            "--app-name=GUI for surround sound",
+            "--app-name=IrateGoose",
             "--icon=audio-volume-muted",
             msg,
         ])

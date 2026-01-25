@@ -1519,22 +1519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gui_for_surround_sound"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "csv",
- "dirs",
- "eframe",
- "egui_extras",
- "env_logger",
- "log",
- "rayon",
- "regex",
- "zstd",
-]
-
-[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1706,6 +1690,22 @@ checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
+]
+
+[[package]]
+name = "irate_goose"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv",
+ "dirs",
+ "eframe",
+ "egui_extras",
+ "env_logger",
+ "log",
+ "rayon",
+ "regex",
+ "zstd",
 ]
 
 [[package]]
