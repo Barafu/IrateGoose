@@ -2,86 +2,23 @@
 
 ## Project Overview
 
-This is a Rust GUI application for configuring surround sound capabilities with Pipewire. The application provides a graphical interface to select and apply surround sound configurations using WAV files.
+- Application written in Rust.
+- Uses eframe/egui v0.33.3 for building GUI. 
+- Platform: Linux only. 
 
-## Basic Information
+## Tools to use
 
-- **Project Name**: GUI for Surround Sound
-- **Language**: Rust
-- **Framework**: eframe/egui for the GUI
-- **Purpose**: Configure surround sound capabilities of Pipewire
+- `cargo check` to verify new code for errors
+- `cargo test` to run tests
+- `cargo add` to add new dependency
 
-## Application Architecture
+## Testing
 
-### Core Components
+ - Do not create new tests unless the user explicitly instructs you to do it. 
 
-1. **Main Application** (`src/main.rs`)
-   - Handles CLI argument parsing
-   - Initializes the file manager
-   - Launches the GUI application
+## Rules
+ 
+ - Ignore /data folder.
+ - Ignore warnings about unused variables,functions and structs unless explicitly instructed to fix them. 
 
-2. **GUI Module** (`src/app_gui.rs`)
-   - Implements the eframe/egui interface
-   - Provides file selection UI
-   - Handles user interactions
-
-3. **File Manager** (`src/file_manager.rs`)
-   - Scans directories recursively for WAV files
-   - Stores relative file paths (stripping base directory prefix)
-   - Sorts entries with HeSuVi/ entries prioritized, then alphabetically
-   - Provides rescan functionality to refresh the file list
-   - Uses WaveFileData struct to store file path information
-
-4. **Config Manager** (`src/config_manager.rs`)
-   - Manages Pipewire configuration files
-   - Uses template from `sink_template.conf`
-   - Creates configuration files in user's config directory
-   - Handles writing, deleting, and checking configuration files
-   - Replaces template placeholders with actual WAV file paths
-
-
-
-## Platform Requirements
-
-### Target Platform
-**This application is intended to be used only on a modern Linux desktop.**
-
-The application has the following platform-specific requirements:
-
-1. **Operating System**: Linux (specifically modern desktop distributions)
-2. **Audio System**: Pipewire audio server
-3. **Dependencies**:
-   - Rust toolchain (cargo, rustc)
-   - eframe/egui dependencies
-   - Standard Linux desktop libraries
-
-### Compatibility Notes
-- The application is designed for Linux Pipewire environments
-- No support for Windows or macOS is planned
-- Requires standard Linux desktop environment for GUI rendering
-
-## Template Texts and Compilation
-
-### Text Compilation Strategy
-**All template texts should be compiled into the binary itself.**
-
-Use one of these approaches:
-
-1. **String Constants**: `const TEXT: &str = "message";`
-2. **Static Strings**: `static TEXT: &'static str = "message";`
-3. **Include Macros**: `include_str!()` for larger text blocks if needed
-
-## Development Guidelines
-
-### Code Organization
-- Keep UI texts as constants in relevant modules
-- Group related texts together for maintainability
-- Use descriptive constant names that indicate purpose
-
-### Distribution
-The resulting binary is self-contained with all necessary texts compiled in. No additional resource files are required for deployment.
-
-### Testing
-- Do not write tests unless explicitly instructed to do so
-- To verify for code errors, run `cargo check`. Do not run `cargo build` afterwards only to check for errors. 
 
