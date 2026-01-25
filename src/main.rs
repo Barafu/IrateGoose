@@ -1,5 +1,6 @@
 mod app_gui;
 mod config_manager;
+mod descriptions;
 mod file_manager;
 
 use eframe::egui::{Style, Visuals};
@@ -9,6 +10,7 @@ use std::{env, path::PathBuf, process};
 
 use app_gui::AppGUI;
 use config_manager::ConfigManager;
+use crate::descriptions::Descriptions;
 use file_manager::FileManager;
 
 // UI texts
@@ -58,6 +60,17 @@ fn main() {
         }
     }
 
+    // Descriptions, loads HRTF descriptions from embedded CSV
+    let descriptions;
+    match Descriptions::new() {
+        Ok(v) => descriptions = v,
+        Err(e) => {
+            let err = format!("Can not load HRTF descriptions. Reason: {e}");
+            show_warning(&err);
+            process::exit(1);
+        }
+    }
+
     // EGUI style - detect system theme
     let visuals = match Command::new("gsettings")
         .args(["get", "org.gnome.desktop.interface", "color-scheme"])
@@ -88,6 +101,7 @@ fn main() {
                 cc,
                 &mut file_manager,
                 &config_manager,
+                &descriptions,
             )))
         }),
     );

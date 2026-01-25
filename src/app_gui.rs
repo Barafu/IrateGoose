@@ -1,13 +1,16 @@
 use eframe::egui;
-use std::path::PathBuf;
+use egui_extras::{Column, TableBuilder};
+use std::path::{Path, PathBuf};
 
 use crate::config_manager::ConfigManager;
+use crate::descriptions::Descriptions;
 use crate::file_manager::{FileManager, WaveSampleRate};
 use log::{error, info};
 
 pub struct AppGUI<'a> {
     file_manager: &'a mut FileManager,
     config_manager: &'a ConfigManager,
+    descriptions: &'a Descriptions,
     selected_index: Option<usize>,
     relative_paths: Vec<PathBuf>,
     sample_rate_filter: WaveSampleRate,
@@ -25,6 +28,7 @@ impl<'a> AppGUI<'a> {
         _cc: &eframe::CreationContext<'_>,
         file_manager: &'a mut FileManager,
         config_manager: &'a ConfigManager,
+        descriptions: &'a Descriptions,
     ) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
 
@@ -35,6 +39,7 @@ impl<'a> AppGUI<'a> {
         Self {
             file_manager,
             config_manager,
+            descriptions,
             selected_index: None,
             relative_paths,
             sample_rate_filter,
@@ -129,6 +134,24 @@ impl<'a> AppGUI<'a> {
             }
         }
     }
+
+    /// Get HRTF metadata for the currently selected file, if any.
+    fn selected_metadata(&self) -> Option<&crate::descriptions::HRTFMetadata> {
+        let index = self.selected_index?;
+        let path = self.file_manager.absolute_path(index);
+        let stem = path.file_stem()?.to_str()?;
+        self.descriptions.get(stem)
+    }
+
+    /// Truncate a description to approximately three lines.
+    fn truncate_description(description: &str) -> String {
+        const MAX_LEN: usize = 240;
+        if description.len() <= MAX_LEN {
+            return description.to_string();
+        }
+        let truncated = &description[..MAX_LEN - 3];
+        format!("{}...", truncated.trim_end())
+    }
 }
 
 impl<'a> eframe::App for AppGUI<'a> {
@@ -214,47 +237,75 @@ impl<'a> eframe::App for AppGUI<'a> {
                 }
             });
 
-            // Create a scrollable area for the file list
-            egui::ScrollArea::vertical()
-                .max_height(300.0)
-                .show(ui, |ui| {
-                    let mut any_displayed = false;
-                    // Display each wave file as a selectable item, filtered by sample rate
-                    for (index, rel_path) in self.relative_paths.iter().enumerate() {
-                        let wave = &self.file_manager.wave_data[index];
-                        let matches = match self.sample_rate_filter {
-                            WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
-                            WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
-                            WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
-                            _ => true,
-                        };
-                        if !matches {
-                            continue;
-                        }
-                        any_displayed = true;
-                        let is_selected = self.selected_index == Some(index);
+            // Create a table for the file list
+            // Collect filtered items
+            let filtered_items: Vec<(usize, &PathBuf)> = self
+                .relative_paths
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| {
+                    let wave = &self.file_manager.wave_data[*index];
+                    match self.sample_rate_filter {
+                        WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
+                        WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
+                        WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
+                        _ => true,
+                    }
+                })
+                .collect();
 
-                        // Create label text
-                        let mut label_text = rel_path.to_string_lossy().to_string();
+            if filtered_items.is_empty() {
+                ui.label("No .wav files matching this filter were found in the directory.");
+            } else {
+                TableBuilder::new(ui)
+                    .column(Column::remainder())
+                    .max_scroll_height(300.0)
+                    .auto_shrink([true, true])
+                    .resizable(true)
+                    .striped(true)
+                    .body(|mut body| {
+                        for (index, rel_path) in filtered_items {
+                            let wave = &self.file_manager.wave_data[index];
+                            let is_selected = self.selected_index == Some(index);
+                            let mut label_text = rel_path.to_string_lossy().to_string();
 
-                        // For damaged files, show as disabled/unselectable
-                        if wave.sample_rate == WaveSampleRate::Damaged {
-                            label_text.insert_str(0, "(Damaged)");
-                            // Show as grayed out label (not selectable)
-                            ui.colored_label(egui::Color32::GRAY, label_text);
-                        } else {
-                            // Normal selectable label
-                            if ui.selectable_label(is_selected, label_text).clicked() {
-                                self.selected_index = Some(index);
+                            if wave.sample_rate == WaveSampleRate::Damaged {
+                                label_text.insert_str(0, "(Damaged)");
+                                body.row(20.0, |mut row| {
+                                    row.col(|ui| {
+                                        ui.colored_label(egui::Color32::GRAY, label_text);
+                                    });
+                                });
+                            } else {
+                                body.row(20.0, |mut row| {
+                                    row.col(|ui| {
+                                        if ui.selectable_label(is_selected, label_text).clicked() {
+                                            self.selected_index = Some(index);
+                                        }
+                                    });
+                                });
                             }
                         }
-                    }
-
-                    // If no files are found, show a message
-                    if !any_displayed {
-                        ui.label("No .wav files matching this filter were found in the directory.");
+                    });
+                // HRTF metadata frame
+                ui.separator();
+                ui.heading("HRTF Metadata");
+                let frame = egui::Frame::group(ui.style());
+                frame.show(ui, |ui| {
+                    if let Some(metadata) = self.selected_metadata() {
+                        ui.heading(&metadata.hrtf);
+                        ui.label(Self::truncate_description(&metadata.description));
+                        if !metadata.source.is_empty() {
+                            ui.label(format!("Source: {}", metadata.source));
+                        }
+                        if !metadata.credits.is_empty() {
+                            ui.label(format!("By: {}", metadata.credits));
+                        }
+                    } else {
+                        ui.label("No description for the selected files.");
                     }
                 });
+            }
         });
     }
 }
