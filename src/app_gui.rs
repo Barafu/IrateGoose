@@ -174,6 +174,8 @@ impl<'a> AppGUI<'a> {
                 .auto_shrink([false, false]) // Vertical auto_shrink false to always use available height
                 .resizable(true)
                 .striped(true)
+                .sense(egui::Sense::click()) // Make rows clickable
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center)) // Center content vertically
                 .header(20.0, |mut header| {
                     header.col(|ui| {
                         ui.heading("Files");
@@ -211,6 +213,9 @@ impl<'a> AppGUI<'a> {
                             })
                             .unwrap_or_default();
 
+                        // Set selection state for the row
+                        row.set_selected(is_selected);
+
                         if wave.sample_rate == WaveSampleRate::Damaged {
                             label_text.insert_str(0, "(Damaged)");
                             row.col(|ui| {
@@ -232,15 +237,11 @@ impl<'a> AppGUI<'a> {
                             });
                         } else {
                             row.col(|ui| {
-                                if ui
-                                    .add(
-                                        egui::Button::selectable(is_selected, label_text)
-                                            .wrap_mode(egui::TextWrapMode::Truncate),
-                                    )
-                                    .clicked()
-                                {
-                                    self.selected_index = Some(index);
-                                }
+                                ui.add(
+                                    egui::Label::new(label_text)
+                                        .truncate()
+                                        .selectable(false),
+                                );
                             });
                             row.col(|ui| {
                                 ui.add(
@@ -249,6 +250,11 @@ impl<'a> AppGUI<'a> {
                                         .selectable(false),
                                 );
                             });
+                        }
+
+                        // Handle row click
+                        if row.response().clicked() {
+                            self.selected_index = Some(index);
                         }
                     });
                 });

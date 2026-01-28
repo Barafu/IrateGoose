@@ -12,11 +12,12 @@
 - `cargo test` to run tests
 - `cargo add` to add new dependency
 - Never run `cargo build --release`
-- Never run `cargo run --release`
+- Never run `cargo run`
 
 ## Testing
 
  - Do not create new tests unless the user explicitly instructs you to do it. 
+ - Use just `cargo test` to run tests, do not try to run specific tests only. 
 
 ## Rules
  
