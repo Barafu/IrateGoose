@@ -7,6 +7,13 @@ use crate::descriptions::Descriptions;
 use crate::file_manager::{FileManager, WaveSampleRate};
 use log::{error, info};
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+/// Represents the selected tab in the main window.
+enum Tab {
+    Files,
+    Options,
+}
+
 pub struct AppGUI<'a> {
     file_manager: &'a mut FileManager,
     config_manager: &'a ConfigManager,
@@ -17,6 +24,7 @@ pub struct AppGUI<'a> {
     config_installed: Option<PathBuf>,
     status_message: String,
     search_text: String,
+    selected_tab: Tab,
 }
 
 enum MessageLevel {
@@ -49,6 +57,7 @@ impl<'a> AppGUI<'a> {
             config_installed,
             status_message: String::new(),
             search_text: String::new(),
+            selected_tab: Tab::Files,
         }
     }
 
@@ -374,6 +383,11 @@ impl<'a> AppGUI<'a> {
             });
         }
     }
+
+    /// Renders the options tab content.
+    fn render_options(&self, ui: &mut egui::Ui) {
+        ui.label("Options tab - coming soon");
+    }
 }
 
 impl<'a> eframe::App for AppGUI<'a> {
@@ -418,7 +432,32 @@ impl<'a> eframe::App for AppGUI<'a> {
             }
 
             ui.separator();
-            self.render_file_list_and_metadata(ui);
+
+            // Tab selection
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut self.selected_tab,
+                    Tab::Files,
+                    egui::RichText::new("Files").heading(),
+                );
+                ui.selectable_value(
+                    &mut self.selected_tab,
+                    Tab::Options,
+                    egui::RichText::new("Options").heading(),
+                );
+            });
+
+            ui.separator();
+
+            // Tab content
+            match self.selected_tab {
+                Tab::Files => {
+                    self.render_file_list_and_metadata(ui);
+                }
+                Tab::Options => {
+                    self.render_options(ui);
+                }
+            }
         });
     }
 }
