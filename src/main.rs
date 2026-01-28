@@ -2,12 +2,14 @@ mod app_gui;
 mod config_manager;
 mod descriptions;
 mod file_manager;
+mod icon_loader;
 
 use clap::Parser;
 use eframe::egui::{Style, Visuals};
 use log::error;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{env, path::PathBuf, process};
 
 use crate::descriptions::Descriptions;
@@ -72,7 +74,7 @@ fn main() {
     }
 
     // Config manager, writes and deletes the PipeWire config
-    
+
     let config_manager = match ConfigManager::new() {
         Ok(v) => v,
         Err(e) => {
@@ -83,7 +85,7 @@ fn main() {
     };
 
     // Descriptions, loads HRTF descriptions from embedded CSV
-    
+
     let descriptions = match Descriptions::new() {
         Ok(v) => v,
         Err(e) => {
@@ -113,7 +115,14 @@ fn main() {
         ..Style::default()
     };
 
-    let eframe_options = eframe::NativeOptions::default();
+    // Load application icon
+    let icon_data = icon_loader::load_icon();
+
+    // Configure eframe options with icon using ViewportBuilder
+    // This only works on X11, not on Wayland
+    let mut eframe_options = eframe::NativeOptions::default();
+    eframe_options.viewport.icon = Some(Arc::new(icon_data));
+
     let _ = eframe::run_native(
         "IrateGoose - Surround Sound Configurator",
         eframe_options,

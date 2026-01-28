@@ -25,6 +25,8 @@ enum MessageLevel {
 }
 
 impl<'a> AppGUI<'a> {
+    const METADATA_FRAME_HEIGHT: f32 = 120.0;
+
     pub fn new(
         _cc: &eframe::CreationContext<'_>,
         file_manager: &'a mut FileManager,
@@ -164,11 +166,12 @@ impl<'a> AppGUI<'a> {
             let row_height = 20.0;
             let num_rows = filtered_items.len();
             let available_width = ui.available_width();
+            let available_height: f32 = ui.available_height() - Self::METADATA_FRAME_HEIGHT;
             TableBuilder::new(ui)
                 .column(Column::initial(available_width * 0.6)) // "Files" column - auto width
                 .column(Column::remainder().clip(true)) // "Description" column - takes remaining width
-                .max_scroll_height(300.0)
-                .auto_shrink([false, true])
+                .max_scroll_height(available_height)
+                .auto_shrink([false, false]) // Vertical auto_shrink false to always use available height
                 .resizable(true)
                 .striped(true)
                 .header(20.0, |mut header| {
@@ -341,23 +344,27 @@ impl<'a> AppGUI<'a> {
         } else {
             self.render_file_table(ui, filtered_items);
             // HRTF metadata frame (detailed view for selected file)
-            ui.separator();
-            ui.heading("HRTF Metadata");
             let frame = egui::Frame::group(ui.style());
             frame.show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                if let Some(metadata) = self.selected_metadata() {
-                    ui.heading(&metadata.hrtf);
-                    ui.label(Self::truncate_description(&metadata.description));
-                    if !metadata.source.is_empty() {
-                        ui.label(format!("Source: {}", metadata.source));
-                    }
-                    if !metadata.credits.is_empty() {
-                        ui.label(format!("By: {}", metadata.credits));
-                    }
-                } else {
-                    ui.label("No description for the selected files.");
-                }
+                // Fixed height scroll area for metadata
+                egui::ScrollArea::vertical()
+                    .max_height(Self::METADATA_FRAME_HEIGHT)
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        if let Some(metadata) = self.selected_metadata() {
+                            ui.heading(&metadata.hrtf);
+                            ui.label(Self::truncate_description(&metadata.description));
+                            if !metadata.source.is_empty() {
+                                ui.label(format!("Source: {}", metadata.source));
+                            }
+                            if !metadata.credits.is_empty() {
+                                ui.label(format!("By: {}", metadata.credits));
+                            }
+                        } else {
+                            ui.label("No description for the selected files.");
+                        }
+                    });
             });
         }
     }
