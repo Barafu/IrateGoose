@@ -1,13 +1,17 @@
-use anyhow::Result;
+use anyhow::{Result};
 use rayon::prelude::*;
+use std::cell::RefCell;
 use std::io::Read;
+use std::rc::Rc;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
+use crate::settings::AppSettings;
+
 pub struct FileManager {
-    wavefile_dir: PathBuf,
+    settings: Rc<RefCell<AppSettings>>,
     pub wave_data: Vec<WaveFileData>,
 }
 
@@ -30,21 +34,33 @@ pub enum WaveSampleRate {
 }
 
 impl FileManager {
-    pub fn new(path: PathBuf) -> Result<FileManager> {
+    pub fn new(settings: Rc<RefCell<AppSettings>>) -> Result<FileManager> {
         let mut f = FileManager {
-            wavefile_dir: path,
+            settings,
             wave_data: Vec::new(),
         };
-        f.rescan_folder()?;
+        f.rescan_configured_directory()?;
         Ok(f)
     }
 
+    /// Returns the wave directory to use, preferring active_wav_directory over wav_directory.
+    /// Returns None if neither is set.
+    fn get_wave_directory(&self) -> Option<PathBuf> {
+        let settings = self.settings.borrow();
+        settings.active_wav_directory
+            .clone()
+            .or_else(|| settings.wav_directory.clone())
+    }
+
     /// Searches for WAV files inside the wavefile_dir, and read info from the files it found.
-    pub fn rescan_folder(&mut self) -> Result<()> {
+    pub fn rescan_configured_directory(&mut self) -> Result<()> {
         // Detect WAV files
         self.wave_data.clear();
-        let w = self.wavefile_dir.clone();
-        self.scan_folder(&w)?;
+        let w = match self.get_wave_directory() {
+            Some(dir) => dir,
+            None => return Ok(()), // No directory configured, nothing to scan
+        };
+        self.scan_directory(&w)?;
 
         // Detect sample rates
         self.wave_data.par_iter_mut().for_each(|wave| {
@@ -69,11 +85,18 @@ impl FileManager {
 
     /// Creates a list of relative paths to all detected WAV files
     pub fn list_relative_paths(&self) -> Vec<PathBuf> {
+        let wavefile_dir = self.get_wave_directory();
+        if wavefile_dir.is_none() {
+            // If no directory is configured, there should be no wave files
+            debug_assert!(self.wave_data.is_empty());
+            return Vec::new();
+        }
+        let wavefile_dir = wavefile_dir.unwrap_or_default();
         self.wave_data
             .iter()
             .map(|wave| {
                 wave.path
-                    .strip_prefix(&self.wavefile_dir)
+                    .strip_prefix(&wavefile_dir)
                     .map(|rel| rel.to_path_buf())
                     .unwrap_or_else(|_| wave.path.clone())
             })
@@ -117,12 +140,12 @@ impl FileManager {
         }
     }
 
-    fn scan_folder(&mut self, path: &Path) -> Result<()> {
+    fn scan_directory(&mut self, path: &Path) -> Result<()> {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                self.scan_folder(&path)?;
+                self.scan_directory(&path)?;
             } else {
                 // Only store files that end with .wav (case-insensitive)
                 let ext = match path.extension() {

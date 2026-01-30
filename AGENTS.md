@@ -21,8 +21,8 @@
 
 ## Rules
  
- - Ignore ./data folder.
- - If a file from data folder is needed, assume that it exists and has proper format.
+ - Ignore ./data directory.
+ - If a file from data directory is needed, assume that it exists and has proper format.
  - Ignore warnings about unused variables,functions and structs unless explicitly instructed to fix them. 
 
 

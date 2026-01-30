@@ -1,10 +1,13 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use crate::config_manager::ConfigManager;
 use crate::descriptions::Descriptions;
 use crate::file_manager::{FileManager, WaveSampleRate};
+use crate::settings::AppSettings;
 use log::{error, info};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -15,6 +18,7 @@ enum Tab {
 }
 
 pub struct AppGUI<'a> {
+    settings: Rc<RefCell<AppSettings>>,
     file_manager: &'a mut FileManager,
     config_manager: &'a ConfigManager,
     descriptions: &'a Descriptions,
@@ -37,6 +41,7 @@ impl<'a> AppGUI<'a> {
 
     pub fn new(
         _cc: &eframe::CreationContext<'_>,
+        settings: Rc<RefCell<AppSettings>>,
         file_manager: &'a mut FileManager,
         config_manager: &'a ConfigManager,
         descriptions: &'a Descriptions,
@@ -48,6 +53,7 @@ impl<'a> AppGUI<'a> {
         let sample_rate_filter = WaveSampleRate::F48000;
 
         Self {
+            settings,
             file_manager,
             config_manager,
             descriptions,
@@ -246,11 +252,7 @@ impl<'a> AppGUI<'a> {
                             });
                         } else {
                             row.col(|ui| {
-                                ui.add(
-                                    egui::Label::new(label_text)
-                                        .truncate()
-                                        .selectable(false),
-                                );
+                                ui.add(egui::Label::new(label_text).truncate().selectable(false));
                             });
                             row.col(|ui| {
                                 ui.add(
@@ -350,9 +352,10 @@ impl<'a> AppGUI<'a> {
 
         // If selected file is no longer visible, deselect it
         if let Some(selected_idx) = self.selected_index
-            && !filtered_items.contains(&selected_idx) {
-                self.selected_index = None;
-            }
+            && !filtered_items.contains(&selected_idx)
+        {
+            self.selected_index = None;
+        }
 
         if filtered_items.is_empty() {
             ui.label("No .wav files matching this filter were found in the directory.");
@@ -394,7 +397,16 @@ impl<'a> eframe::App for AppGUI<'a> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
             // Add status bar at the bottom
-            ui.label(&self.status_message);
+            ui.horizontal(|ui| {
+                if self.settings.borrow().dev_mode {
+                    ui.label(
+                        egui::RichText::new("DEV")
+                            .color(egui::Color32::YELLOW)
+                            .strong(),
+                    );
+                }
+                ui.label(&self.status_message);
+            });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Select Surround Sound");

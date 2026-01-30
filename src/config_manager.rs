@@ -1,11 +1,16 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::process::Command;
+use std::cell::RefCell;
+use std::rc::Rc;
 use anyhow::{Context, Result, anyhow};
+
+use crate::settings::AppSettings;
 
 pub struct ConfigManager {
     /// Full absolute path to the config file
     config_path: PathBuf,
+    settings: Rc<RefCell<AppSettings>>,
 }
 
 impl ConfigManager {
@@ -13,14 +18,15 @@ impl ConfigManager {
     const CONFIG_TEMPLATE: &'static str = include_str!("../sink_template.conf");
 
     /// Creates a new ConfigManager instance
-    pub fn new() -> Result<ConfigManager> {
-        // Determine the full path to the current user's ~/.config folder
+    pub fn new(settings: Rc<RefCell<AppSettings>>) -> Result<ConfigManager> {
+        // Determine the full path to the current user's ~/.config directory
         let config_dir = dirs::config_dir().ok_or(anyhow!("Could not determine home directory"))?;
         
-        // Determine config suffix based on DEV_MODE
+        // Determine config suffix based on dev_mode from settings
         // Uses /tmp/surround.conf in dev mode for testing
         // Uses the real PipeWire config path in production mode
-        let config_suffix = if crate::DEV_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+        let dev_mode = settings.borrow().dev_mode;
+        let config_suffix = if dev_mode {
             "/tmp/surround.conf"
         } else {
             "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf"
@@ -31,6 +37,7 @@ impl ConfigManager {
         
         Ok(Self {
             config_path,
+            settings,
         })
     }
         
@@ -105,7 +112,7 @@ impl ConfigManager {
     /// Does nothing when in dev mode.
     fn apply_config(&self) -> Result<()> {
         // In dev mode, skip restarting services
-        if crate::DEV_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+        if self.settings.borrow().dev_mode {
             return Ok(());
         }
         

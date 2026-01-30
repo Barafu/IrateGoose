@@ -3,26 +3,22 @@ mod config_manager;
 mod descriptions;
 mod file_manager;
 mod icon_loader;
+mod settings;
 
 use clap::Parser;
 use eframe::egui::{Style, Visuals};
 use log::error;
+use std::cell::RefCell;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::rc::Rc;
 use std::sync::Arc;
-use std::{env, path::PathBuf, process};
+use std::{path::PathBuf, process};
 
 use crate::descriptions::Descriptions;
+use crate::settings::AppSettings;
 use app_gui::AppGUI;
 use config_manager::ConfigManager;
 use file_manager::FileManager;
-
-// UI texts
-const NO_WAVEFILE_PATH: &str = "Could not determine path to wave files";
-
-/// Global development mode flag
-/// True in debug builds, false in release builds
-static DEV_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 
 /// Command line arguments
 #[derive(Parser)]
@@ -44,38 +40,38 @@ fn main() {
     // Parse CLI arguments
     let args = CliArgs::parse();
 
-    // Override DEV_MODE if dry_run is true
-    if args.dry_run {
-        DEV_MODE.store(true, Ordering::Relaxed);
-    }
+    // Create a temporary settings instance with the determined dev mode
+    let mut temp_settings = AppSettings::default();
+    temp_settings.dev_mode = args.dry_run;
 
-    // Determine path to search for wave files
-    let wavefiles_path = args
-        .path
-        .or_else(|| env::current_dir().ok())
-        .unwrap_or_else(|| {
-            show_warning(NO_WAVEFILE_PATH);
-            panic!("{NO_WAVEFILE_PATH}")
-        });
+    // Load application settings using the temp settings to determine path
+    let loaded_settings = match temp_settings.load() {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("Failed to load settings: {}, using defaults", e);
+            temp_settings
+        }
+    };
+
+    let settings = Rc::new(RefCell::new(loaded_settings));
+
+    if let Some(p) = args.path {
+        settings.borrow_mut().active_wav_directory = Some(p.clone());
+    }
 
     // File manager, scans for WAV files.
     let mut file_manager;
-    match FileManager::new(wavefiles_path.clone()) {
+    match FileManager::new(settings.clone()) {
         Ok(v) => file_manager = v,
         Err(e) => {
-            let err = format!(
-                "Can not find wave files in {}. Reason: {}",
-                wavefiles_path.to_str().unwrap_or_default(),
-                e
-            );
+            let err = format!("Can not find wave files. Reason: {e}");
             show_warning(&err);
             process::exit(1);
         }
     }
 
     // Config manager, writes and deletes the PipeWire config
-
-    let config_manager = match ConfigManager::new() {
+    let config_manager = match ConfigManager::new(settings.clone()) {
         Ok(v) => v,
         Err(e) => {
             let err = format!("Can not process config file. Reason: {e}");
@@ -130,6 +126,7 @@ fn main() {
             cc.egui_ctx.set_style(style);
             Ok(Box::new(AppGUI::new(
                 cc,
+                settings.clone(),
                 &mut file_manager,
                 &config_manager,
                 &descriptions,
