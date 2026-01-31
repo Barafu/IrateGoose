@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use std::collections::BTreeMap;
 use anyhow::{Result, anyhow};
 use csv::ReaderBuilder;
-use std::io::Read;
 use log::warn;
+use std::collections::BTreeMap;
+use std::io::Read;
 
 /// Represents the configuration type for HRTF measurements
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +20,7 @@ impl Configuration {
             "Headphones" => Some(Configuration::Headphones),
             "Speakers" => Some(Configuration::Speakers),
             "" => None, // Empty string is treated as None
-            _ => None, // Invalid values are also treated as None
+            _ => None,  // Invalid values are also treated as None
         }
     }
 }
@@ -47,28 +47,31 @@ impl Descriptions {
     pub fn new() -> Result<Self> {
         // Load the compressed CSV data embedded in the binary
         const COMPRESSED_DATA: &[u8] = include_bytes!("../data/HRTF_Descriptions.csv.zst");
-        
+
         // Decompress the ZSTD compressed data
         let mut decoder = zstd::Decoder::new(COMPRESSED_DATA)?;
         let mut decompressed_data = Vec::new();
         decoder.read_to_end(&mut decompressed_data)?;
-        
+
         // Parse the CSV data (semicolon-separated)
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(true)
             .from_reader(decompressed_data.as_slice());
-        
+
         let mut entries = BTreeMap::new();
-        
+
         for result in rdr.records() {
             let record = result?;
-            
+
             // Expected columns: HRIR;HRTF;Configuration;Description;Source;Credits;Points
             if record.len() != 7 {
-                return Err(anyhow!("Invalid CSV record length: expected 7 columns, got {}", record.len()));
+                return Err(anyhow!(
+                    "Invalid CSV record length: expected 7 columns, got {}",
+                    record.len()
+                ));
             }
-            
+
             let hrir = record[0].to_string();
 
             // HRIR should be unique
@@ -76,14 +79,17 @@ impl Descriptions {
                 warn!("Non-unique HRIR value '{}', skipping second entry", hrir);
                 continue;
             }
-            
+
             // Parse configuration field
             let config_str = record[2].trim();
             let configuration = Configuration::from_str(config_str);
             if !config_str.is_empty() && configuration.is_none() {
-                warn!("Invalid configuration value '{}' for HRIR '{}', treating as None", config_str, hrir);
+                warn!(
+                    "Invalid configuration value '{}' for HRIR '{}', treating as None",
+                    config_str, hrir
+                );
             }
-            
+
             // Parse points field
             let points_str = record[6].trim();
             let points = if points_str.is_empty() {
@@ -92,13 +98,15 @@ impl Descriptions {
                 match points_str.parse::<u32>() {
                     Ok(value) => Some(value),
                     Err(e) => {
-                        warn!("Failed to parse points '{}' as u32 for HRIR '{}': {}, treating as None", 
-                              points_str, hrir, e);
+                        warn!(
+                            "Failed to parse points '{}' as u32 for HRIR '{}': {}, treating as None",
+                            points_str, hrir, e
+                        );
                         None
                     }
                 }
             };
-            
+
             let entry = HRTFMetadata {
                 hrtf: record[1].to_string(),
                 configuration,
@@ -107,33 +115,33 @@ impl Descriptions {
                 credits: record[5].to_string(),
                 points,
             };
-                        
+
             entries.insert(hrir, entry);
         }
-        
+
         Ok(Self { entries })
     }
-    
+
     /// Get the description entry for a given HRIR filename (without extension)
     pub fn get(&self, hrir_filename: &str) -> Option<&HRTFMetadata> {
         self.entries.get(hrir_filename)
     }
-    
+
     /// Check if a description exists for the given HRIR filename
     pub fn contains(&self, hrir_filename: &str) -> bool {
         self.entries.contains_key(hrir_filename)
     }
-    
+
     /// Get the number of entries in the database
     pub fn len(&self) -> usize {
         self.entries.len()
     }
-    
+
     /// Check if the database is empty
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
-    
+
     /// Get an iterator over all entries (HRIR filename and description)
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, HRTFMetadata> {
         self.entries.iter()
@@ -147,17 +155,24 @@ mod tests {
     #[test]
     fn test_descriptions_loading() {
         let descriptions = Descriptions::new();
-        assert!(descriptions.is_ok(), "Failed to load descriptions: {:?}", descriptions.err());
-        
+        assert!(
+            descriptions.is_ok(),
+            "Failed to load descriptions: {:?}",
+            descriptions.err()
+        );
+
         let descriptions = descriptions.unwrap();
-        assert!(!descriptions.is_empty(), "Descriptions database should not be empty");
-        
+        assert!(
+            !descriptions.is_empty(),
+            "Descriptions database should not be empty"
+        );
+
         // Test that we can retrieve some entries
         // Note: We don't know specific HRIR filenames in the database,
         // but we can at least verify the iterator works
         let count = descriptions.len();
         assert!(count > 0, "Expected at least one entry in the database");
-        
+
         // Verify that iterating works (some fields may be empty in the CSV)
         let mut iter_count = 0;
         for (hrir, _entry) in descriptions.iter() {
@@ -165,40 +180,54 @@ mod tests {
             iter_count += 1;
         }
         assert_eq!(iter_count, count, "Iterator should return all entries");
-        
+
         println!("Successfully loaded {} HRTF descriptions", count);
-    }    
-    
-    
+    }
+
     #[test]
     fn test_configuration_parsing() {
-        assert_eq!(Configuration::from_str("Headphones"), Some(Configuration::Headphones));
-        assert_eq!(Configuration::from_str("Speakers"), Some(Configuration::Speakers));
+        assert_eq!(
+            Configuration::from_str("Headphones"),
+            Some(Configuration::Headphones)
+        );
+        assert_eq!(
+            Configuration::from_str("Speakers"),
+            Some(Configuration::Speakers)
+        );
         assert_eq!(Configuration::from_str(""), None);
         assert_eq!(Configuration::from_str("Invalid"), None);
         assert_eq!(Configuration::from_str("headphones"), None); // case sensitive
-        assert_eq!(Configuration::from_str("  Headphones  "), Some(Configuration::Headphones)); // trimmed
-    }  
-    
+        assert_eq!(
+            Configuration::from_str("  Headphones  "),
+            Some(Configuration::Headphones)
+        ); // trimmed
+    }
+
     #[test]
     fn test_sadie_019_entry() {
         // Test that the database contains the SADIE_019 entry with expected values
-        let descriptions = Descriptions::new()
-            .expect("Failed to load descriptions database");
-        
+        let descriptions = Descriptions::new().expect("Failed to load descriptions database");
+
         // Check that SADIE_019 exists in the database
-        let entry = descriptions.get("SADIE_019")
+        let entry = descriptions
+            .get("SADIE_019")
             .expect("SADIE_019 entry not found in database");
-        
+
         // Verify all expected fields match the provided values
         assert_eq!(entry.hrtf, "SADIE", "HRTF field mismatch");
-        assert_eq!(entry.configuration, Some(Configuration::Headphones), "Configuration mismatch");
+        assert_eq!(
+            entry.configuration,
+            Some(Configuration::Headphones),
+            "Configuration mismatch"
+        );
         assert_eq!(entry.description, "Human subject", "Description mismatch");
         assert_eq!(entry.points, Some(170), "Points mismatch (expected 170)");
-        
+
         // Optional: Also verify that source and credits are not empty (if they should contain data)
         assert!(!entry.source.is_empty(), "Source field should not be empty");
-        assert!(!entry.credits.is_empty(), "Credits field should not be empty");
-        
+        assert!(
+            !entry.credits.is_empty(),
+            "Credits field should not be empty"
+        );
     }
 }

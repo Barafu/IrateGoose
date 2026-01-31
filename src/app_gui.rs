@@ -18,17 +18,41 @@ enum Tab {
 }
 
 pub struct AppGUI<'a> {
+    // === App data ===
+    // Application settings
     settings: Rc<RefCell<AppSettings>>,
+    // Manages a collection of WAV files
     file_manager: &'a mut FileManager,
+    // Manages writing Pipewire configuration
     config_manager: &'a ConfigManager,
+    // HRTF descriptions database
     descriptions: &'a Descriptions,
+
+    // === UI state ===
+    // Index of selected file in list
     selected_index: Option<usize>,
+    // List of relative paths to WAV files
     relative_paths: Vec<PathBuf>,
+    // Currently selected sample rate filter
     sample_rate_filter: WaveSampleRate,
+    // Path to WAV file set in installed Pipewire config file if any
     config_installed: Option<PathBuf>,
+    // Status bar message
     status_message: String,
+    // Search filter text
     search_text: String,
+    // Currently selected tab (Files/Options)
     selected_tab: Tab,
+    // Directory path displayed in edit field in options tab
+    directory_text: String,
+
+    // === Modal state ===
+    // Whether modal dialog is open
+    modal_open: bool,
+    // Modal dialog header text
+    modal_header: String,
+    // Modal dialog message text
+    modal_message: String,
 }
 
 enum MessageLevel {
@@ -52,6 +76,13 @@ impl<'a> AppGUI<'a> {
         let relative_paths = file_manager.list_relative_paths();
         let sample_rate_filter = WaveSampleRate::F48000;
 
+        // Initialize directory_text from settings
+        let current_dir = settings.borrow().get_wav_directory();
+        let directory_text = current_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+
         Self {
             settings,
             file_manager,
@@ -64,6 +95,10 @@ impl<'a> AppGUI<'a> {
             status_message: String::new(),
             search_text: String::new(),
             selected_tab: Tab::Files,
+            modal_open: false,
+            modal_header: String::new(),
+            modal_message: String::new(),
+            directory_text,
         }
     }
 
@@ -152,6 +187,14 @@ impl<'a> AppGUI<'a> {
                 self.status_message = format!("ERROR! {}", message);
             }
         }
+    }
+
+    /// Shows a modal dialog with a header, message body, and a "Continue" button.
+    /// The modal will be displayed until the user clicks "Continue" or closes it.
+    fn show_modal(&mut self, header: &str, message: &str) {
+        self.modal_open = true;
+        self.modal_header = header.to_string();
+        self.modal_message = message.to_string();
     }
 
     /// Get HRTF metadata for the currently selected file, if any.
@@ -388,8 +431,101 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Renders the options tab content.
-    fn render_options(&self, ui: &mut egui::Ui) {
-        ui.label("Options tab - coming soon");
+    fn render_options(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Options");
+        ui.label("Various application options and settings.");
+
+        ui.separator();
+
+        ui.heading("WAV Directory");
+        ui.label("Set the directory containing WAV files for surround sound:");
+
+        ui.horizontal(|ui| {
+            ui.label("Directory:");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to WAV files"),
+            );
+            if ui.button("Select").clicked() {
+                // TODO: Implement directory picker
+                self.show_modal(
+                    "Not Implemented",
+                    "Directory selection is not yet implemented.",
+                );
+            }
+            let rescan_enabled = !self.directory_text.trim().is_empty();
+            let rescan_button = ui.add_enabled(rescan_enabled, egui::Button::new("Rescan"));
+            if rescan_button.clicked() {
+                self.on_rescan_click();
+            }
+        });
+
+        ui.separator();
+
+        ui.heading("Modal Test");
+        ui.label("Test the modal dialog functionality:");
+        if ui.button("Show test message").clicked() {
+            self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
+        }
+    }
+
+    /// Handles the "Rescan" button click for WAV directory.
+    fn on_rescan_click(&mut self) {
+        let dir_text = self.directory_text.trim().to_string();
+        if dir_text.is_empty() {
+            return;
+        }
+
+        let path = PathBuf::from(&dir_text);
+
+        // Check if directory exists and is a directory
+        if !path.exists() {
+            self.show_modal(
+                "Directory Not Found",
+                "The specified directory does not exist.",
+            );
+            return;
+        }
+
+        if !path.is_dir() {
+            self.show_modal("Not a Directory", "The specified path is not a directory.");
+            return;
+        }
+
+        // Update settings with new directory
+        {
+            let mut settings = self.settings.borrow_mut();
+            settings.set_wav_directory(path.clone());
+        }
+
+        // Save settings
+        self.write_settings();
+
+        // Rescan files
+        match self.file_manager.rescan_configured_directory() {
+            Ok(()) => {
+                // Update relative paths list
+                self.relative_paths = self.file_manager.list_relative_paths();
+                self.selected_index = None;
+                self.message(
+                    MessageLevel::Normal,
+                    &format!("Rescanned directory: {}", dir_text),
+                );
+            }
+            Err(e) => {
+                self.show_modal(
+                    "Rescan Error",
+                    &format!("Failed to rescan directory: {}", e),
+                );
+            }
+        }
+    }
+
+    /// Write current settings to disk.
+    fn write_settings(&mut self) {
+        let save_result = self.settings.borrow().save();
+        if let Err(e) = save_result {
+            self.show_modal("Settings Error", &format!("Failed to save settings: {}", e));
+        }
     }
 }
 
@@ -468,6 +604,30 @@ impl<'a> eframe::App for AppGUI<'a> {
                 }
                 Tab::Options => {
                     self.render_options(ui);
+                }
+            }
+
+            // Render modal if open
+            if self.modal_open {
+                let modal = egui::Modal::new(egui::Id::new("message_modal")).show(ctx, |ui| {
+                    ui.set_width(300.0);
+
+                    // Header
+                    ui.heading(&self.modal_header);
+
+                    // Message body
+                    ui.label(&self.modal_message);
+
+                    ui.separator();
+
+                    // Continue button
+                    if ui.button("Continue").clicked() {
+                        ui.close();
+                    }
+                });
+
+                if modal.should_close() {
+                    self.modal_open = false;
                 }
             }
         });

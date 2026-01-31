@@ -28,9 +28,9 @@ struct CliArgs {
     #[arg(value_name = "PATH")]
     path: Option<PathBuf>,
 
-    /// Dry-run mode (hidden),makes app to write Pipewire config in /tmp instead of proper placement.
+    /// Dev-mode (hidden),makes app to write Pipewire config in /tmp instead of proper placement.
     #[arg(long, hide = true)]
-    dry_run: bool,
+    dev_mode: bool,
 }
 
 fn main() {
@@ -42,7 +42,7 @@ fn main() {
 
     // Create a temporary settings instance with the determined dev mode
     let mut temp_settings = AppSettings::default();
-    temp_settings.dev_mode = args.dry_run;
+    temp_settings.dev_mode = args.dev_mode;
 
     // Load application settings using the temp settings to determine path
     let loaded_settings = match temp_settings.load() {
@@ -56,7 +56,7 @@ fn main() {
     let settings = Rc::new(RefCell::new(loaded_settings));
 
     if let Some(p) = args.path {
-        settings.borrow_mut().active_wav_directory = Some(p.clone());
+        settings.borrow_mut().set_temp_wav_directory(p);
     }
 
     // File manager, scans for WAV files.

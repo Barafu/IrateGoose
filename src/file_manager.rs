@@ -1,4 +1,4 @@
-use anyhow::{Result};
+use anyhow::Result;
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::io::Read;
@@ -13,6 +13,8 @@ use crate::settings::AppSettings;
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
     pub wave_data: Vec<WaveFileData>,
+    /// Wavefile dir that was scanned last time.
+    current_wavefile_dir: Option<PathBuf>,
 }
 
 // All about Wav file
@@ -38,25 +40,18 @@ impl FileManager {
         let mut f = FileManager {
             settings,
             wave_data: Vec::new(),
+            current_wavefile_dir: None,
         };
         f.rescan_configured_directory()?;
         Ok(f)
-    }
-
-    /// Returns the wave directory to use, preferring active_wav_directory over wav_directory.
-    /// Returns None if neither is set.
-    fn get_wave_directory(&self) -> Option<PathBuf> {
-        let settings = self.settings.borrow();
-        settings.active_wav_directory
-            .clone()
-            .or_else(|| settings.wav_directory.clone())
     }
 
     /// Searches for WAV files inside the wavefile_dir, and read info from the files it found.
     pub fn rescan_configured_directory(&mut self) -> Result<()> {
         // Detect WAV files
         self.wave_data.clear();
-        let w = match self.get_wave_directory() {
+        self.current_wavefile_dir = self.settings.borrow().get_wav_directory();
+        let w = match self.current_wavefile_dir.clone() {
             Some(dir) => dir,
             None => return Ok(()), // No directory configured, nothing to scan
         };
@@ -85,7 +80,7 @@ impl FileManager {
 
     /// Creates a list of relative paths to all detected WAV files
     pub fn list_relative_paths(&self) -> Vec<PathBuf> {
-        let wavefile_dir = self.get_wave_directory();
+        let wavefile_dir = self.settings.borrow().get_wav_directory();
         if wavefile_dir.is_none() {
             // If no directory is configured, there should be no wave files
             debug_assert!(self.wave_data.is_empty());
