@@ -4,6 +4,9 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Default virtual device name used when no custom name is provided.
+pub const DEFAULT_VIRTUAL_DEVICE_NAME: &str = "Virtual Surround Sink";
+
 /// Application settings for IrateGoose (NOT PipeWire settings).
 /// These settings control the application behavior, such as WAV directory
 /// preferences and virtual device naming, and are stored separately from
@@ -30,7 +33,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             wav_directory: None,
-            virtual_device_name: "Virtual Surround Sink".to_string(),
+            virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
             active_wav_directory: None,
             dev_mode: false,
         }

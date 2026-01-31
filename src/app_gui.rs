@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::config_manager::ConfigManager;
 use crate::descriptions::Descriptions;
 use crate::file_manager::{FileManager, WaveSampleRate};
-use crate::settings::AppSettings;
+use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use log::{error, info};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -45,6 +45,8 @@ pub struct AppGUI<'a> {
     selected_tab: Tab,
     // Directory path displayed in edit field in options tab
     directory_text: String,
+    // Virtual device name displayed in edit field in options tab
+    device_name_text: String,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -83,6 +85,9 @@ impl<'a> AppGUI<'a> {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
 
+        // Initialize device_name_text from settings
+        let device_name_text = settings.borrow().virtual_device_name.clone();
+
         Self {
             settings,
             file_manager,
@@ -99,6 +104,7 @@ impl<'a> AppGUI<'a> {
             modal_header: String::new(),
             modal_message: String::new(),
             directory_text,
+            device_name_text,
         }
     }
 
@@ -317,7 +323,7 @@ impl<'a> AppGUI<'a> {
 
     /// Renders the file list table with two columns: "Files" and "Description".
     fn render_file_list_and_metadata(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Registered Wave Files");
+        ui.heading("Located IR Files");
 
         // Radio buttons for sample rate filter
         ui.horizontal(|ui| {
@@ -361,7 +367,7 @@ impl<'a> AppGUI<'a> {
         // Search field
         ui.horizontal(|ui| {
             ui.add(
-                egui::TextEdit::singleline(&mut self.search_text).hint_text("Search wav files..."),
+                egui::TextEdit::singleline(&mut self.search_text).hint_text("Search IR files..."),
             );
             if ui.button("Clear").clicked() {
                 self.search_text.clear();
@@ -437,13 +443,13 @@ impl<'a> AppGUI<'a> {
 
         ui.separator();
 
-        ui.heading("WAV Directory");
-        ui.label("Set the directory containing WAV files for surround sound:");
+        ui.heading("IR files Directory");
+        ui.label("Set the directory containing IR files for surround sound:");
 
         ui.horizontal(|ui| {
             ui.label("Directory:");
             ui.add(
-                egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to WAV files"),
+                egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to IR files"),
             );
             if ui.button("Select").clicked() {
                 // TODO: Implement directory picker
@@ -456,6 +462,27 @@ impl<'a> AppGUI<'a> {
             let rescan_button = ui.add_enabled(rescan_enabled, egui::Button::new("Rescan"));
             if rescan_button.clicked() {
                 self.on_rescan_click();
+            }
+        });
+
+        ui.separator();
+
+        ui.heading("Virtual Device Name");
+        ui.label("Set the name of the virtual audio device that will appear in your system audio settings:");
+        ui.horizontal(|ui| {
+            ui.label("Device name:");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.device_name_text)
+                    .hint_text("Virtual device name"),
+            );
+            let apply_enabled = !self.device_name_text.trim().is_empty();
+            let apply_button = ui.add_enabled(apply_enabled, egui::Button::new("Apply"));
+            if apply_button.clicked() {
+                self.on_apply_device_name_click();
+            }
+            let default_button = ui.button("Default");
+            if default_button.clicked() {
+                self.on_default_device_name_click();
             }
         });
 
@@ -500,6 +527,8 @@ impl<'a> AppGUI<'a> {
         // Save settings
         self.write_settings();
 
+       
+
         // Rescan files
         match self.file_manager.rescan_configured_directory() {
             Ok(()) => {
@@ -508,7 +537,7 @@ impl<'a> AppGUI<'a> {
                 self.selected_index = None;
                 self.message(
                     MessageLevel::Normal,
-                    &format!("Rescanned directory: {}", dir_text),
+                    &format!("Scanned IR directory: {}", dir_text),
                 );
             }
             Err(e) => {
@@ -518,6 +547,34 @@ impl<'a> AppGUI<'a> {
                 );
             }
         }
+    }
+
+    /// Handles the "Apply" button click for virtual device name.
+    fn on_apply_device_name_click(&mut self) {
+        let trimmed = self.device_name_text.trim().to_string();
+        debug_assert!(! trimmed.is_empty());
+
+        // Update settings
+        {
+            let mut settings = self.settings.borrow_mut();
+            settings.virtual_device_name = trimmed.clone();
+        }
+
+        // Save settings
+        self.write_settings();
+
+        // Show success message
+        self.message(
+            MessageLevel::Normal,
+            &format!("Device name updated to '{}'", trimmed),
+        );
+    }
+
+    /// Handles the "Default" button click for virtual device name.
+    fn on_default_device_name_click(&mut self) {
+        // Set text to default
+        self.device_name_text = DEFAULT_VIRTUAL_DEVICE_NAME.to_string();
+        self.on_apply_device_name_click();
     }
 
     /// Write current settings to disk.
@@ -545,7 +602,7 @@ impl<'a> eframe::App for AppGUI<'a> {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Select Surround Sound");
+            ui.heading("Create Virtual Device");
 
             // Determine if a file is selected
             let is_file_selected = self.selected_index.is_some();
@@ -554,15 +611,18 @@ impl<'a> eframe::App for AppGUI<'a> {
             ui.horizontal(|ui| {
                 // The "Write config" button should be disabled if no file is selected
                 let write_button =
-                    ui.add_enabled(is_file_selected, egui::Button::new("Write config"));
+                    ui.add_enabled(is_file_selected, egui::Button::new("Create device"));
                 if write_button.clicked() {
                     self.on_write_config_click();
+                }
+                if ! write_button.enabled() && write_button.hovered() {
+                    write_button.on_hover_text("Select a IR file to proceed.");
                 }
 
                 // The "Delete config" button should be disabled if config is not installed
                 let delete_button = ui.add_enabled(
                     self.config_installed.is_some(),
-                    egui::Button::new("Delete config"),
+                    egui::Button::new("Remove device"),
                 );
                 if delete_button.clicked() {
                     self.on_delete_config_click();
@@ -572,7 +632,7 @@ impl<'a> eframe::App for AppGUI<'a> {
             // Display current config status
             match &self.config_installed {
                 Some(path) => {
-                    ui.label(format!("Current config: {}", path.display()));
+                    ui.label(format!("Current IR file: {}", path.display()));
                 }
                 None => {
                     ui.label("No config installed");
