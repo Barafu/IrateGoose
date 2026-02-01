@@ -47,6 +47,8 @@ pub struct AppGUI<'a> {
     directory_text: String,
     // Virtual device name displayed in edit field in options tab
     device_name_text: String,
+    // UI theme preference (local copy for radio buttons)
+    theme_preference: eframe::egui::ThemePreference,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -66,7 +68,7 @@ impl<'a> AppGUI<'a> {
     const METADATA_FRAME_HEIGHT: f32 = 120.0;
 
     pub fn new(
-        _cc: &eframe::CreationContext<'_>,
+        cc: &eframe::CreationContext<'_>,
         settings: Rc<RefCell<AppSettings>>,
         file_manager: &'a mut FileManager,
         config_manager: &'a ConfigManager,
@@ -88,6 +90,10 @@ impl<'a> AppGUI<'a> {
         // Initialize device_name_text from settings
         let device_name_text = settings.borrow().virtual_device_name.clone();
 
+        // Initialize theme preference from settings and apply it
+        let theme_preference = settings.borrow().theme_preference;
+        cc.egui_ctx.set_theme(theme_preference);
+
         Self {
             settings,
             file_manager,
@@ -105,6 +111,7 @@ impl<'a> AppGUI<'a> {
             modal_message: String::new(),
             directory_text,
             device_name_text,
+            theme_preference,
         }
     }
 
@@ -438,11 +445,6 @@ impl<'a> AppGUI<'a> {
 
     /// Renders the options tab content.
     fn render_options(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Options");
-        ui.label("Various application options and settings.");
-
-        ui.separator();
-
         ui.heading("IR files Directory");
         ui.label("Set the directory containing IR files for surround sound:");
 
@@ -469,18 +471,36 @@ impl<'a> AppGUI<'a> {
 
         ui.heading("Virtual Device Name");
         ui.label("Set the name of the virtual audio device that will appear in your system audio settings:");
+
+        // Display currently configured device name
+        let current_device_name = self.settings.borrow().virtual_device_name.clone();
+        ui.label(format!("Currently configured: {}", current_device_name));
+
         ui.horizontal(|ui| {
             ui.label("Device name:");
             ui.add(
                 egui::TextEdit::singleline(&mut self.device_name_text)
                     .hint_text("Virtual device name"),
             );
-            let apply_enabled = !self.device_name_text.trim().is_empty();
+
+            // Get current device name inside the closure to avoid borrowing issues
+            let current_device_name = self.settings.borrow().virtual_device_name.clone();
+            let default_value = DEFAULT_VIRTUAL_DEVICE_NAME;
+
+            // Apply button should be disabled when text matches current settings
+            let trimmed_text = self.device_name_text.trim().to_string();
+            let apply_enabled = !trimmed_text.is_empty() && trimmed_text != current_device_name;
             let apply_button = ui.add_enabled(apply_enabled, egui::Button::new("Apply"));
             if apply_button.clicked() {
-                self.on_apply_device_name_click();
+                self.on_apply_device_name_click(&trimmed_text);
             }
-            let default_button = ui.button("Default");
+
+            // Default button must be disabled when text matches default value
+            // AND default value matches the value in settings
+            let default_button_enabled =
+                !(trimmed_text == default_value && current_device_name == default_value);
+            let default_button =
+                ui.add_enabled(default_button_enabled, egui::Button::new("Default"));
             if default_button.clicked() {
                 self.on_default_device_name_click();
             }
@@ -488,10 +508,24 @@ impl<'a> AppGUI<'a> {
 
         ui.separator();
 
-        ui.heading("Modal Test");
-        ui.label("Test the modal dialog functionality:");
-        if ui.button("Show test message").clicked() {
-            self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
+        ui.heading("UI Theme");
+        ui.label("Select the application visual theme:");
+        let old_preference = self.theme_preference;
+        self.theme_preference.radio_buttons(ui);
+        if self.theme_preference != old_preference {
+            // Update settings
+            self.settings.borrow_mut().theme_preference = self.theme_preference;
+            self.write_settings();
+            // Apply immediately
+            ui.ctx().set_theme(self.theme_preference);
+        }
+
+        ui.separator();
+
+        if self.settings.borrow().dev_mode {
+            if ui.button("Show modal test message").clicked() {
+                self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
+            }
         }
     }
 
@@ -527,17 +561,19 @@ impl<'a> AppGUI<'a> {
         // Save settings
         self.write_settings();
 
-       
-
         // Rescan files
         match self.file_manager.rescan_configured_directory() {
             Ok(()) => {
                 // Update relative paths list
                 self.relative_paths = self.file_manager.list_relative_paths();
                 self.selected_index = None;
+                let file_count = self.file_manager.wave_data.len();
                 self.message(
                     MessageLevel::Normal,
-                    &format!("Scanned IR directory: {}", dir_text),
+                    &format!(
+                        "Scanned IR directory: {} ({} files found)",
+                        dir_text, file_count
+                    ),
                 );
             }
             Err(e) => {
@@ -550,14 +586,13 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Handles the "Apply" button click for virtual device name.
-    fn on_apply_device_name_click(&mut self) {
-        let trimmed = self.device_name_text.trim().to_string();
-        debug_assert!(! trimmed.is_empty());
+    fn on_apply_device_name_click(&mut self, trimmed_text: &str) {
+        debug_assert!(!trimmed_text.is_empty());
 
         // Update settings
         {
             let mut settings = self.settings.borrow_mut();
-            settings.virtual_device_name = trimmed.clone();
+            settings.virtual_device_name = trimmed_text.to_string();
         }
 
         // Save settings
@@ -566,7 +601,7 @@ impl<'a> AppGUI<'a> {
         // Show success message
         self.message(
             MessageLevel::Normal,
-            &format!("Device name updated to '{}'", trimmed),
+            &format!("Device name updated to '{}'", trimmed_text),
         );
     }
 
@@ -574,7 +609,7 @@ impl<'a> AppGUI<'a> {
     fn on_default_device_name_click(&mut self) {
         // Set text to default
         self.device_name_text = DEFAULT_VIRTUAL_DEVICE_NAME.to_string();
-        self.on_apply_device_name_click();
+        self.on_apply_device_name_click(DEFAULT_VIRTUAL_DEVICE_NAME);
     }
 
     /// Write current settings to disk.
@@ -615,7 +650,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                 if write_button.clicked() {
                     self.on_write_config_click();
                 }
-                if ! write_button.enabled() && write_button.hovered() {
+                if !write_button.enabled() && write_button.hovered() {
                     write_button.on_hover_text("Select a IR file to proceed.");
                 }
 

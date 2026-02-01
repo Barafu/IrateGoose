@@ -25,4 +25,7 @@
  - If a file from data directory is needed, assume that it exists and has proper format.
  - Ignore warnings about unused variables,functions and structs unless explicitly instructed to fix them. 
 
+ ## Notes
+ - Function trim() of a String object returns a referense to the string, not a separate value. Use .trim().to_string() to get a separate value().
+
 

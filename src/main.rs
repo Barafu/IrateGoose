@@ -6,7 +6,6 @@ mod icon_loader;
 mod settings;
 
 use clap::Parser;
-use eframe::egui::{Style, Visuals};
 use log::error;
 use std::cell::RefCell;
 use std::process::Command;
@@ -91,26 +90,6 @@ fn main() {
         }
     };
 
-    // EGUI style - detect system theme
-    let visuals = match Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if stdout.trim() == "'prefer-light'" {
-                Visuals::light()
-            } else {
-                Visuals::dark()
-            }
-        }
-        _ => Visuals::dark(), // default to dark on any error
-    };
-    let style = Style {
-        visuals,
-        ..Style::default()
-    };
-
     // Load application icon
     let icon_data = icon_loader::load_icon();
 
@@ -123,7 +102,7 @@ fn main() {
         "IrateGoose - Surround Sound Configurator",
         eframe_options,
         Box::new(|cc| {
-            cc.egui_ctx.set_style(style);
+            // Theme will be set by AppGUI constructor
             Ok(Box::new(AppGUI::new(
                 cc,
                 settings.clone(),

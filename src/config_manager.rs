@@ -48,7 +48,7 @@ impl ConfigManager {
     pub fn write_config(&self, wavefile_path: &Path) -> Result<()> {
         //Create text for config file
         let config_text = Self::CONFIG_TEMPLATE
-            .replace("TEMPLATE", wavefile_path.to_string_lossy().as_ref())
+            .replace("IRFILETEMPLATE", wavefile_path.to_string_lossy().as_ref())
             .replace("DEVICENAMETEMPLATE", &self.settings.borrow().virtual_device_name);
         // Ensure the parent directory exists
         if let Some(parent) = self.config_path.parent() {

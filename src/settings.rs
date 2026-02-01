@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use eframe::egui::ThemePreference;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -20,6 +21,9 @@ pub struct AppSettings {
     /// Virtual device name for PipeWire
     pub virtual_device_name: String,
 
+    /// UI theme preference (Light, Dark, or follow system)
+    pub theme_preference: ThemePreference,
+
     /// Active WAV directory (runtime only, not persisted)
     #[serde(skip)]
     active_wav_directory: Option<PathBuf>,
@@ -34,6 +38,7 @@ impl Default for AppSettings {
         Self {
             wav_directory: None,
             virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
+            theme_preference: ThemePreference::System,
             active_wav_directory: None,
             dev_mode: false,
         }
