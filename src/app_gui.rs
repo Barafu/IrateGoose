@@ -5,10 +5,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::config_manager::ConfigManager;
-use crate::descriptions::Descriptions;
 use crate::file_manager::{FileManager, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use log::{error, info};
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 /// Represents the selected tab in the main window.
@@ -25,14 +27,10 @@ pub struct AppGUI<'a> {
     file_manager: &'a mut FileManager,
     // Manages writing Pipewire configuration
     config_manager: &'a ConfigManager,
-    // HRTF descriptions database
-    descriptions: &'a Descriptions,
 
     // === UI state ===
     // Index of selected file in list
     selected_index: Option<usize>,
-    // List of relative paths to WAV files
-    relative_paths: Vec<PathBuf>,
     // Currently selected sample rate filter
     sample_rate_filter: WaveSampleRate,
     // Path to WAV file set in installed Pipewire config file if any
@@ -72,12 +70,10 @@ impl<'a> AppGUI<'a> {
         settings: Rc<RefCell<AppSettings>>,
         file_manager: &'a mut FileManager,
         config_manager: &'a ConfigManager,
-        descriptions: &'a Descriptions,
     ) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
 
         let config_installed = Self::check_config_exists(config_manager);
-        let relative_paths = file_manager.list_relative_paths();
         let sample_rate_filter = WaveSampleRate::F48000;
 
         // Initialize directory_text from settings
@@ -94,13 +90,18 @@ impl<'a> AppGUI<'a> {
         let theme_preference = settings.borrow().theme_preference;
         cc.egui_ctx.set_theme(theme_preference);
 
+        // If scan_success is true, perform a safe rescan on startup
+        let scan_success = settings.borrow().scan_success;
+        if scan_success {
+            // Attempt to rescan, but if it fails we keep empty lists
+            let _ = Self::safe_rescan_internal(settings.clone(), file_manager);
+        }
+
         Self {
             settings,
             file_manager,
             config_manager,
-            descriptions,
             selected_index: None,
-            relative_paths,
             sample_rate_filter,
             config_installed,
             status_message: String::new(),
@@ -130,7 +131,8 @@ impl<'a> AppGUI<'a> {
 
     fn on_write_config_click(&mut self) {
         if let Some(index) = self.selected_index {
-            let absolute_path = self.file_manager.absolute_path(index).to_path_buf();
+            let selected_wav = &self.file_manager.wave_data[index];
+            let absolute_path = selected_wav.path.as_path();
             let display_path = absolute_path.display().to_string();
             match self.config_manager.write_config(&absolute_path) {
                 Ok(()) => {
@@ -213,9 +215,7 @@ impl<'a> AppGUI<'a> {
     /// Get HRTF metadata for the currently selected file, if any.
     fn selected_metadata(&self) -> Option<&crate::descriptions::HRTFMetadata> {
         let index = self.selected_index?;
-        let path = self.file_manager.absolute_path(index);
-        let stem = path.file_stem()?.to_str()?;
-        self.descriptions.get(stem)
+        self.file_manager.wave_data[index].metadata.as_deref()
     }
 
     /// Truncate a description to approximately three lines.
@@ -260,22 +260,16 @@ impl<'a> AppGUI<'a> {
                     body.rows(row_height, num_rows, |mut row| {
                         let row_index = row.index();
                         let index = filtered_items[row_index];
-                        let rel_path = &self.relative_paths[index];
                         let wave = &self.file_manager.wave_data[index];
+                        let rel_path = &wave.relative_path;
                         let is_selected = self.selected_index == Some(index);
                         let mut label_text = rel_path.to_string_lossy().to_string();
 
                         // Get HRTF metadata for this file (cheap lookup)
-                        let description_text = self
-                            .file_manager
-                            .absolute_path(index)
-                            .file_stem()
-                            .and_then(|stem| stem.to_str())
-                            .and_then(|stem| self.descriptions.get(stem))
-                            .map(|metadata| {
+                        let description_text = wave.metadata.as_ref()
+                            .map(|rc| {
                                 // Take first line of description, fallback to empty string
-                                metadata
-                                    .description
+                                rc.description
                                     .lines()
                                     .next()
                                     .unwrap_or("")
@@ -359,10 +353,9 @@ impl<'a> AppGUI<'a> {
                 if let Some(index) = self.selected_index {
                     let wave = &self.file_manager.wave_data[index];
                     let matches = match self.sample_rate_filter {
-                        WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
-                        WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
-                        WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
-                        _ => true,
+                        WaveSampleRate::Unknown => true,
+                        WaveSampleRate::Damaged => false,
+                        _ => wave.sample_rate == self.sample_rate_filter
                     };
                     if !matches {
                         self.selected_index = None;
@@ -383,22 +376,21 @@ impl<'a> AppGUI<'a> {
 
         // Collect filtered items (indices only)
         let filtered_items: Vec<usize> = self
-            .relative_paths
+            .file_manager
+            .wave_data
             .iter()
             .enumerate()
-            .filter(|(index, rel_path)| {
-                let wave = &self.file_manager.wave_data[*index];
-                let sample_rate_ok = match self.sample_rate_filter {
-                    WaveSampleRate::F48000 => wave.sample_rate == WaveSampleRate::F48000,
-                    WaveSampleRate::F44100 => wave.sample_rate == WaveSampleRate::F44100,
-                    WaveSampleRate::F96000 => wave.sample_rate == WaveSampleRate::F96000,
-                    _ => true,
-                };
+            .filter(|(_index, wave)| {
+                let sample_rate_ok = match self.sample_rate_filter { 
+                        WaveSampleRate::Unknown => true,
+                        WaveSampleRate::Damaged => false,
+                        _ => wave.sample_rate == self.sample_rate_filter
+                    };
                 let search_ok = if self.search_text.is_empty() {
                     true
                 } else {
                     let search_lower = self.search_text.to_lowercase();
-                    let path_lower = rel_path.to_string_lossy().to_lowercase();
+                    let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
                     path_lower.contains(&search_lower)
                 };
                 sample_rate_ok && search_ok
@@ -521,8 +513,13 @@ impl<'a> AppGUI<'a> {
         }
 
         ui.separator();
+        ui.heading("About");
+        ui.label(format!("IrateGoose v{}", VERSION));
+        ui.hyperlink_to("Home page", REPOSITORY);
 
         if self.settings.borrow().dev_mode {
+            // Developer-only buttons
+            ui.separator();
             if ui.button("Show modal test message").clicked() {
                 self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
             }
@@ -561,13 +558,9 @@ impl<'a> AppGUI<'a> {
         // Save settings
         self.write_settings();
 
-        // Rescan files
-        match self.file_manager.rescan_configured_directory() {
-            Ok(()) => {
-                // Update relative paths list
-                self.relative_paths = self.file_manager.list_relative_paths();
-                self.selected_index = None;
-                let file_count = self.file_manager.wave_data.len();
+        // Perform safe rescan
+        match self.safe_rescan() {
+            Ok(file_count) => {
                 self.message(
                     MessageLevel::Normal,
                     &format!(
@@ -583,6 +576,60 @@ impl<'a> AppGUI<'a> {
                 );
             }
         }
+    }
+
+    /// Performs a safe rescan with scan_success flag management.
+    /// Returns the number of files scanned on success, or an error.
+    fn safe_rescan(&mut self) -> anyhow::Result<usize> {
+        // Set scan_success to false before scanning
+        {
+            let mut settings = self.settings.borrow_mut();
+            settings.scan_success = false;
+        }
+        self.write_settings();
+
+        // Perform the actual scan
+        self.file_manager.rescan_configured_directory()?;
+
+        // Update UI state
+        self.selected_index = None;
+        let file_count = self.file_manager.wave_data.len();
+
+        // Set scan_success to true after successful scan
+        {
+            let mut settings = self.settings.borrow_mut();
+            settings.scan_success = true;
+        }
+        self.write_settings();
+
+        Ok(file_count)
+    }
+
+    /// Internal helper for safe rescan that doesn't update UI.
+    /// Used by constructor.
+    fn safe_rescan_internal(
+        settings: Rc<RefCell<AppSettings>>,
+        file_manager: &mut FileManager,
+    ) -> anyhow::Result<()> {
+        // Set scan_success to false before scanning
+        {
+            let mut settings = settings.borrow_mut();
+            settings.scan_success = false;
+        }
+        // Save settings (ignore errors for now)
+        let _ = settings.borrow().save();
+
+        // Perform the actual scan
+        file_manager.rescan_configured_directory()?;
+
+        // Set scan_success to true after successful scan
+        {
+            let mut settings = settings.borrow_mut();
+            settings.scan_success = true;
+        }
+        let _ = settings.borrow().save();
+
+        Ok(())
     }
 
     /// Handles the "Apply" button click for virtual device name.

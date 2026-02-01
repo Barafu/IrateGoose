@@ -1,5 +1,4 @@
 use anyhow::Result;
-use rayon::prelude::*;
 use std::cell::RefCell;
 use std::io::Read;
 use std::rc::Rc;
@@ -8,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::descriptions::HRTFMetadata;
 use crate::settings::AppSettings;
 
 pub struct FileManager {
@@ -15,13 +15,16 @@ pub struct FileManager {
     pub wave_data: Vec<WaveFileData>,
     /// Wavefile dir that was scanned last time.
     current_wavefile_dir: Option<PathBuf>,
+    descriptions: crate::descriptions::Descriptions,
 }
 
 // All about Wav file
 #[derive(Debug, Default)]
 pub struct WaveFileData {
     pub path: PathBuf,
+    pub relative_path: PathBuf,
     pub sample_rate: WaveSampleRate,
+    pub metadata: Option<Rc<HRTFMetadata>>,
 }
 
 // Detected sample rate of Wav file
@@ -36,14 +39,13 @@ pub enum WaveSampleRate {
 }
 
 impl FileManager {
-    pub fn new(settings: Rc<RefCell<AppSettings>>) -> Result<FileManager> {
-        let mut f = FileManager {
+    pub fn new(settings: Rc<RefCell<AppSettings>>, descriptions: crate::descriptions::Descriptions) -> FileManager {
+        FileManager {
             settings,
             wave_data: Vec::new(),
             current_wavefile_dir: None,
-        };
-        f.rescan_configured_directory()?;
-        Ok(f)
+            descriptions,
+        }
     }
 
     /// Searches for WAV files inside the wavefile_dir, and read info from the files it found.
@@ -51,16 +53,16 @@ impl FileManager {
         // Detect WAV files
         self.wave_data.clear();
         self.current_wavefile_dir = self.settings.borrow().get_wav_directory();
-        let w = match self.current_wavefile_dir.clone() {
+        let working_path = match self.current_wavefile_dir.clone() {
             Some(dir) => dir,
             None => return Ok(()), // No directory configured, nothing to scan
         };
-        self.scan_directory(&w)?;
+        self.scan_directory(&working_path)?;
 
         // Detect sample rates
-        self.wave_data.par_iter_mut().for_each(|wave| {
+        for wave in &mut self.wave_data {
             wave.sample_rate = Self::detect_sample_rate(&wave.path);
-        });
+        }
 
         // Sort entries: HeSuVi entries first, then alphabetically by path
         self.wave_data.sort_by(|a, b| {
@@ -74,36 +76,20 @@ impl FileManager {
             }
         });
 
+        // Populate metadata from descriptions
+        for wave in &mut self.wave_data {
+            let stem = wave.path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            wave.metadata = self.descriptions.get_rc(stem);
+        }
+
         self.wave_data.shrink_to_fit();
         Ok(())
     }
 
-    /// Creates a list of relative paths to all detected WAV files
-    pub fn list_relative_paths(&self) -> Vec<PathBuf> {
-        let wavefile_dir = self.settings.borrow().get_wav_directory();
-        if wavefile_dir.is_none() {
-            // If no directory is configured, there should be no wave files
-            debug_assert!(self.wave_data.is_empty());
-            return Vec::new();
-        }
-        let wavefile_dir = wavefile_dir.unwrap_or_default();
-        self.wave_data
-            .iter()
-            .map(|wave| {
-                wave.path
-                    .strip_prefix(&wavefile_dir)
-                    .map(|rel| rel.to_path_buf())
-                    .unwrap_or_else(|_| wave.path.clone())
-            })
-            .collect()
-    }
-
-    pub fn absolute_path(&self, index: usize) -> &Path {
-        &self.wave_data[index].path
-    }
 
     fn detect_sample_rate(path: &Path) -> WaveSampleRate {
-        // return WaveSampleRate::Damaged; // Uncomment for debug
         // Open the file
         let mut file = match std::fs::File::open(path) {
             Ok(file) => file,
@@ -154,10 +140,20 @@ impl FileManager {
                 if !ext_str.eq_ignore_ascii_case("wav") {
                     continue;
                 }
+                // Compute relative path relative to current_wavefile_dir
+                let relative_path = match &self.current_wavefile_dir {
+                    Some(base_dir) => path
+                        .strip_prefix(base_dir)
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|_| path.clone()),
+                    None => path.clone(),
+                };
                 // Store absolute path with detected sample rate
                 self.wave_data.push(WaveFileData {
-                    path: path.clone(),
+                    path: path,
+                    relative_path,
                     sample_rate: WaveSampleRate::Unknown,
+                    metadata: None,
                 });
             }
         }

@@ -58,33 +58,24 @@ fn main() {
         settings.borrow_mut().set_temp_wav_directory(p);
     }
 
-    // File manager, scans for WAV files.
-    let mut file_manager;
-    match FileManager::new(settings.clone()) {
-        Ok(v) => file_manager = v,
+    // Descriptions, loads HRTF descriptions from embedded CSV
+    let descriptions = match Descriptions::new() {
+        Ok(v) => v,
         Err(e) => {
-            let err = format!("Can not find wave files. Reason: {e}");
+            let err = format!("Can not load HRTF descriptions. Reason: {e}");
             show_warning(&err);
             process::exit(1);
         }
-    }
+    };
+
+    // File manager, scans for WAV files.
+    let mut file_manager = FileManager::new(settings.clone(), descriptions);
 
     // Config manager, writes and deletes the PipeWire config
     let config_manager = match ConfigManager::new(settings.clone()) {
         Ok(v) => v,
         Err(e) => {
             let err = format!("Can not process config file. Reason: {e}");
-            show_warning(&err);
-            process::exit(1);
-        }
-    };
-
-    // Descriptions, loads HRTF descriptions from embedded CSV
-
-    let descriptions = match Descriptions::new() {
-        Ok(v) => v,
-        Err(e) => {
-            let err = format!("Can not load HRTF descriptions. Reason: {e}");
             show_warning(&err);
             process::exit(1);
         }
@@ -108,7 +99,6 @@ fn main() {
                 settings.clone(),
                 &mut file_manager,
                 &config_manager,
-                &descriptions,
             )))
         }),
     );

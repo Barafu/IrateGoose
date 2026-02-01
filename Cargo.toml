@@ -2,6 +2,10 @@
 name = "irate_goose"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/Barafu/IrateGoose"
+publish = false
+license = "MIT"
+description = "A GUI to configure virtual surround sound capabilities of Pipewire"
 
 [dependencies]
 eframe = { version = "0.33.3", features = ["serde"] }
@@ -19,12 +23,17 @@ image = "0.25.9"
 toml = "0.9.11"
 serde = { version = "1.0.228", features = ["derive"] }
 egui = { version = "0.33.3", features = ["serde"] }
+xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }
 
 [profile.release]
 strip = true #Remove extra symbols
 opt-level = "s" #Optimize for size
 lto = true #Enable linker optimizations
 codegen-units=1 #Maximise optimizations
+
+[profile.dev]
+panic = "unwind"  # This ensures backtraces work
+
 
 [dev-dependencies]
 tempfile = "3.24.0"

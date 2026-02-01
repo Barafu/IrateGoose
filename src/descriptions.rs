@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 use log::warn;
 use std::collections::BTreeMap;
 use std::io::Read;
+use std::rc::Rc;
 
 /// Represents the configuration type for HRTF measurements
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +40,7 @@ pub struct HRTFMetadata {
 /// Provides descriptions and credits for WAV files from the embedded database
 pub struct Descriptions {
     /// Maps HRIR filename (without extension) to its description entry
-    entries: BTreeMap<String, HRTFMetadata>,
+    entries: BTreeMap<String, Rc<HRTFMetadata>>,
 }
 
 impl Descriptions {
@@ -116,35 +117,15 @@ impl Descriptions {
                 points,
             };
 
-            entries.insert(hrir, entry);
+            entries.insert(hrir, Rc::new(entry));
         }
 
         Ok(Self { entries })
     }
 
-    /// Get the description entry for a given HRIR filename (without extension)
-    pub fn get(&self, hrir_filename: &str) -> Option<&HRTFMetadata> {
-        self.entries.get(hrir_filename)
-    }
-
-    /// Check if a description exists for the given HRIR filename
-    pub fn contains(&self, hrir_filename: &str) -> bool {
-        self.entries.contains_key(hrir_filename)
-    }
-
-    /// Get the number of entries in the database
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Check if the database is empty
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Get an iterator over all entries (HRIR filename and description)
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, HRTFMetadata> {
-        self.entries.iter()
+    /// Get a shared reference-counted handle to the metadata.
+    pub fn get_rc(&self, hrir_filename: &str) -> Option<Rc<HRTFMetadata>> {
+        self.entries.get(hrir_filename).cloned()
     }
 }
 
@@ -163,19 +144,19 @@ mod tests {
 
         let descriptions = descriptions.unwrap();
         assert!(
-            !descriptions.is_empty(),
+            !descriptions.entries.is_empty(),
             "Descriptions database should not be empty"
         );
 
         // Test that we can retrieve some entries
         // Note: We don't know specific HRIR filenames in the database,
         // but we can at least verify the iterator works
-        let count = descriptions.len();
+        let count = descriptions.entries.len();
         assert!(count > 0, "Expected at least one entry in the database");
 
         // Verify that iterating works (some fields may be empty in the CSV)
         let mut iter_count = 0;
-        for (hrir, _entry) in descriptions.iter() {
+        for (hrir, _entry) in descriptions.entries.iter() {
             assert!(!hrir.is_empty(), "HRIR filename should not be empty");
             iter_count += 1;
         }
@@ -209,24 +190,24 @@ mod tests {
         let descriptions = Descriptions::new().expect("Failed to load descriptions database");
 
         // Check that SADIE_019 exists in the database
-        let entry = descriptions
-            .get("SADIE_019")
+        let entry_rc = descriptions
+            .get_rc("SADIE_019")
             .expect("SADIE_019 entry not found in database");
 
         // Verify all expected fields match the provided values
-        assert_eq!(entry.hrtf, "SADIE", "HRTF field mismatch");
+        assert_eq!(entry_rc.hrtf, "SADIE", "HRTF field mismatch");
         assert_eq!(
-            entry.configuration,
+            entry_rc.configuration,
             Some(Configuration::Headphones),
             "Configuration mismatch"
         );
-        assert_eq!(entry.description, "Human subject", "Description mismatch");
-        assert_eq!(entry.points, Some(170), "Points mismatch (expected 170)");
+        assert_eq!(entry_rc.description, "Human subject", "Description mismatch");
+        assert_eq!(entry_rc.points, Some(170), "Points mismatch (expected 170)");
 
         // Optional: Also verify that source and credits are not empty (if they should contain data)
-        assert!(!entry.source.is_empty(), "Source field should not be empty");
+        assert!(!entry_rc.source.is_empty(), "Source field should not be empty");
         assert!(
-            !entry.credits.is_empty(),
+            !entry_rc.credits.is_empty(),
             "Credits field should not be empty"
         );
     }
