@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Result, anyhow};
 use csv::ReaderBuilder;
 use log::warn;
@@ -27,6 +25,7 @@ impl Configuration {
 }
 
 /// Represents a single entry from the HRTF descriptions CSV (excluding the HRIR filename)
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct HRTFMetadata {
     pub hrtf: String,

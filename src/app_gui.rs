@@ -134,7 +134,7 @@ impl<'a> AppGUI<'a> {
             let selected_wav = &self.file_manager.wave_data[index];
             let absolute_path = selected_wav.path.as_path();
             let display_path = absolute_path.display().to_string();
-            match self.config_manager.write_config(&absolute_path) {
+            match self.config_manager.write_config(absolute_path) {
                 Ok(()) => {
                     // Double-check that config was written correctly and extract the path from config
                     match self.config_manager.config_exists() {

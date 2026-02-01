@@ -5,7 +5,6 @@ use std::rc::Rc;
 use std::{
     fs,
     path::{Path, PathBuf},
-    collections::HashMap,
 };
 
 use crate::descriptions::HRTFMetadata;
@@ -72,7 +71,7 @@ impl FileManager {
         let paths: Vec<PathBuf> = self.wave_data.iter().map(|w|w.path.clone()).collect();
         // Multithreaded scan of files to collect metadata
         let metarecords: Vec<FileMetadataRecord> = paths.par_iter().map(|path| {
-            let (samplerate, checksum) = Self::detect_sample_rate_and_checksum(&path);
+            let (samplerate, checksum) = Self::detect_sample_rate_and_checksum(path);
             FileMetadataRecord {
                 samplerate,
                 checksum,

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use eframe::egui::ThemePreference;
 use serde::{Deserialize, Serialize};
