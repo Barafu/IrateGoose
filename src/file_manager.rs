@@ -1,14 +1,16 @@
 use anyhow::Result;
+use rayon::prelude::*;
 use std::cell::RefCell;
-use std::io::Read;
 use std::rc::Rc;
 use std::{
     fs,
     path::{Path, PathBuf},
+    collections::HashMap,
 };
 
 use crate::descriptions::HRTFMetadata;
 use crate::settings::AppSettings;
+use xxhash_rust::xxh3::xxh3_64;
 
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
@@ -25,6 +27,7 @@ pub struct WaveFileData {
     pub relative_path: PathBuf,
     pub sample_rate: WaveSampleRate,
     pub metadata: Option<Rc<HRTFMetadata>>,
+    pub checksum: u64,
 }
 
 // Detected sample rate of Wav file
@@ -59,10 +62,27 @@ impl FileManager {
         };
         self.scan_directory(&working_path)?;
 
-        // Detect sample rates
-        for wave in &mut self.wave_data {
-            wave.sample_rate = Self::detect_sample_rate(&wave.path);
+        // Detect sample rates and compute checksums
+        // This will store intermediate results
+        struct FileMetadataRecord {
+            samplerate: WaveSampleRate,
+            checksum: u64,
         }
+        // Copy all file paths, keeping the order
+        let paths: Vec<PathBuf> = self.wave_data.iter().map(|w|w.path.clone()).collect();
+        // Multithreaded scan of files to collect metadata
+        let metarecords: Vec<FileMetadataRecord> = paths.par_iter().map(|path| {
+            let (samplerate, checksum) = Self::detect_sample_rate_and_checksum(&path);
+            FileMetadataRecord {
+                samplerate,
+                checksum,
+            }
+        }).collect();
+        // Copy collected metadta back to wave data
+        self.wave_data.iter_mut().zip(metarecords.iter()).for_each(|d|{
+            d.0.sample_rate = d.1.samplerate;
+            d.0.checksum = d.1.checksum;
+        });
 
         // Sort entries: HeSuVi entries first, then alphabetically by path
         self.wave_data.sort_by(|a, b| {
@@ -89,36 +109,36 @@ impl FileManager {
     }
 
 
-    fn detect_sample_rate(path: &Path) -> WaveSampleRate {
-        // Open the file
-        let mut file = match std::fs::File::open(path) {
-            Ok(file) => file,
-            Err(_) => return WaveSampleRate::Damaged,
+    fn detect_sample_rate_and_checksum(path: &Path) -> (WaveSampleRate, u64) {
+        // Read entire file
+        let data = match std::fs::read(path) {
+            Ok(data) => data,
+            Err(_) => return (WaveSampleRate::Damaged, 0),
         };
 
-        // Read at least 28 bytes to get the sample rate at offset 24-27
-        let mut buffer = [0u8; 28];
-        match file.read_exact(&mut buffer) {
-            Ok(_) => (),
-            Err(_) => return WaveSampleRate::Damaged,
+        // Check length
+        if data.len() < 28 {
+            return (WaveSampleRate::Damaged, 0);
         }
 
         // Verify WAV header
-        // Bytes 0-3 should be "RIFF", bytes 8-11 should be "WAVE"
-        if &buffer[0..4] != b"RIFF" || &buffer[8..12] != b"WAVE" {
-            return WaveSampleRate::Damaged;
+        if &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+            return (WaveSampleRate::Damaged, 0);
         }
 
-        // Extract sample rate from bytes 24-27 (little-endian u32)
-        let sample_rate = u32::from_le_bytes([buffer[24], buffer[25], buffer[26], buffer[27]]);
-
-        // Match to known sample rates
-        match sample_rate {
+        // Extract sample rate
+        let sample_rate = u32::from_le_bytes([data[24], data[25], data[26], data[27]]);
+        let wave_sample_rate = match sample_rate {
             44100 => WaveSampleRate::F44100,
             48000 => WaveSampleRate::F48000,
             96000 => WaveSampleRate::F96000,
             _ => WaveSampleRate::Unknown,
-        }
+        };
+
+        // Compute xxh3 hash
+        let hash = xxh3_64(&data);
+
+        (wave_sample_rate, hash)
     }
 
     fn scan_directory(&mut self, path: &Path) -> Result<()> {
@@ -150,10 +170,9 @@ impl FileManager {
                 };
                 // Store absolute path with detected sample rate
                 self.wave_data.push(WaveFileData {
-                    path: path,
+                    path,
                     relative_path,
-                    sample_rate: WaveSampleRate::Unknown,
-                    metadata: None,
+                    ..Default::default()
                 });
             }
         }
