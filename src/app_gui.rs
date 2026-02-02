@@ -1,5 +1,6 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
+use rfd::FileDialog;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -116,7 +117,7 @@ impl<'a> AppGUI<'a> {
         }
     }
 
-    /// Checks if config exists and returns the path if found.
+    /// Checks if Pipewire config exists and returns the path if found.
     /// Returns None if config doesn't exist or there's an error.
     fn check_config_exists(config_manager: &ConfigManager) -> Option<PathBuf> {
         match config_manager.config_exists() {
@@ -446,11 +447,26 @@ impl<'a> AppGUI<'a> {
                 egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to IR files"),
             );
             if ui.button("Select").clicked() {
-                // TODO: Implement directory picker
-                self.show_modal(
-                    "Not Implemented",
-                    "Directory selection is not yet implemented.",
-                );
+                // Create file dialog for directory selection
+                let mut dialog = FileDialog::new()
+                    .set_title("Select IR Files Directory");
+                
+                // Try to set starting directory from current directory_text if it's a valid path
+                let current_dir = self.directory_text.trim();
+                if !current_dir.is_empty() {
+                    let path = PathBuf::from(current_dir);
+                    if path.exists() && path.is_dir() {
+                        dialog = dialog.set_directory(path);
+                    }
+                }
+                
+                // Show directory picker dialog
+                if let Some(selected_folder) = dialog.pick_folder() {
+                    // Update directory text field with selected path
+                    self.directory_text = selected_folder.to_string_lossy().to_string();
+                    // Automatically trigger rescan for the newly selected directory
+                    self.on_rescan_click();
+                }
             }
             let rescan_enabled = !self.directory_text.trim().is_empty();
             let rescan_button = ui.add_enabled(rescan_enabled, egui::Button::new("Rescan"));

@@ -24,6 +24,7 @@ toml = "0.9.11"
 serde = { version = "1.0.228", features = ["derive"] }
 egui = { version = "0.33.3", features = ["serde"] }
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }
+rfd = { version = "0.17.2", features = ["xdg-portal"] }
 
 [profile.release]
 strip = true #Remove extra symbols
