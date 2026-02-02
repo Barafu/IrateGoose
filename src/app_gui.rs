@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::config_manager::ConfigManager;
-use crate::file_manager::{FileManager, WaveSampleRate};
+use crate::file_manager::{FileManager, WaveSampleRate, WavFileData};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use log::{error, info};
 
@@ -30,8 +30,8 @@ pub struct AppGUI<'a> {
     config_manager: &'a ConfigManager,
 
     // === UI state ===
-    // Index of selected file in list
-    selected_index: Option<usize>,
+    // Checksum of selected file (None if none selected)
+    selected_checksum: Option<u64>,
     // Currently selected sample rate filter
     sample_rate_filter: WaveSampleRate,
     // Path to WAV file set in installed Pipewire config file if any
@@ -48,6 +48,8 @@ pub struct AppGUI<'a> {
     device_name_text: String,
     // UI theme preference (local copy for radio buttons)
     theme_preference: eframe::egui::ThemePreference,
+    // Cached filtered items (None when dirty)
+    filtered_items: Option<Vec<WavFileData>>,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -102,7 +104,7 @@ impl<'a> AppGUI<'a> {
             settings,
             file_manager,
             config_manager,
-            selected_index: None,
+            selected_checksum: None,
             sample_rate_filter,
             config_installed,
             status_message: String::new(),
@@ -114,6 +116,7 @@ impl<'a> AppGUI<'a> {
             directory_text,
             device_name_text,
             theme_preference,
+            filtered_items: None,
         }
     }
 
@@ -131,8 +134,14 @@ impl<'a> AppGUI<'a> {
     }
 
     fn on_write_config_click(&mut self) {
-        if let Some(index) = self.selected_index {
-            let selected_wav = &self.file_manager.wave_data[index];
+        if let Some(checksum) = self.selected_checksum {
+            let selected_wav = match self.find_wave_by_checksum(checksum) {
+                Some(wave) => wave,
+                None => {
+                    self.message(MessageLevel::Error, "Selected file not found");
+                    return;
+                }
+            };
             let absolute_path = selected_wav.path.as_path();
             let display_path = absolute_path.display().to_string();
             match self.config_manager.write_config(absolute_path) {
@@ -213,10 +222,16 @@ impl<'a> AppGUI<'a> {
         self.modal_message = message.to_string();
     }
 
+    /// Find wave data by checksum.
+    fn find_wave_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
+        self.file_manager.wave_data.iter().find(|w| w.checksum == checksum)
+    }
+
     /// Get HRTF metadata for the currently selected file, if any.
     fn selected_metadata(&self) -> Option<&crate::descriptions::HRTFMetadata> {
-        let index = self.selected_index?;
-        self.file_manager.wave_data[index].metadata.as_deref()
+        let checksum = self.selected_checksum?;
+        let wave = self.find_wave_by_checksum(checksum)?;
+        wave.metadata.as_deref()
     }
 
     /// Truncate a description to approximately three lines.
@@ -230,7 +245,7 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Renders the file table with two columns: "Files" and "Description".
-    fn render_file_table(&mut self, ui: &mut egui::Ui, filtered_items: Vec<usize>) {
+    fn render_file_table(&mut self, ui: &mut egui::Ui, filtered_items: Vec<WavFileData>) {
         // Wrap the table in its own frame
         let table_frame = egui::Frame::group(ui.style());
         table_frame.show(ui, |ui| {
@@ -259,11 +274,9 @@ impl<'a> AppGUI<'a> {
                 .body(|body| {
                     // Table rows are generated here
                     body.rows(row_height, num_rows, |mut row| {
-                        let row_index = row.index();
-                        let index = filtered_items[row_index];
-                        let wave = &self.file_manager.wave_data[index];
+                        let wave = &filtered_items[row.index()];
                         let rel_path = &wave.relative_path;
-                        let is_selected = self.selected_index == Some(index);
+                        let is_selected = self.selected_checksum == Some(wave.checksum);
                         let mut label_text = rel_path.to_string_lossy().to_string();
 
                         // Get HRTF metadata for this file (cheap lookup)
@@ -316,7 +329,7 @@ impl<'a> AppGUI<'a> {
 
                         // Handle row click
                         if row.response().clicked() {
-                            self.selected_index = Some(index);
+                            self.selected_checksum = Some(wave.checksum);
                         }
                     });
                 });
@@ -351,65 +364,81 @@ impl<'a> AppGUI<'a> {
             // Check if filter changed
             if old_filter != self.sample_rate_filter {
                 // If a file is selected, check if it's still visible with the new filter
-                if let Some(index) = self.selected_index {
-                    let wave = &self.file_manager.wave_data[index];
-                    let matches = match self.sample_rate_filter {
-                        WaveSampleRate::Unknown => true,
-                        WaveSampleRate::Damaged => false,
-                        _ => wave.sample_rate == self.sample_rate_filter
-                    };
-                    if !matches {
-                        self.selected_index = None;
+                if let Some(checksum) = self.selected_checksum {
+                    if let Some(wave) = self.find_wave_by_checksum(checksum) {
+                        let matches = match self.sample_rate_filter {
+                            WaveSampleRate::Unknown => true,
+                            WaveSampleRate::Damaged => false,
+                            _ => wave.sample_rate == self.sample_rate_filter
+                        };
+                        if !matches {
+                            self.selected_checksum = None;
+                        }
+                    } else {
+                        // Selected wave not found (should not happen)
+                        self.selected_checksum = None;
                     }
                 }
+                // Invalidate cached filtered items
+                self.filtered_items = None;
             }
         });
 
         // Search field
         ui.horizontal(|ui| {
+            let old_search = self.search_text.clone();
             ui.add(
                 egui::TextEdit::singleline(&mut self.search_text).hint_text("Search IR files..."),
             );
             if ui.button("Clear").clicked() {
                 self.search_text.clear();
+                self.filtered_items = None;
+            }
+            // If search text changed, invalidate cache
+            if old_search != self.search_text {
+                self.filtered_items = None;
             }
         });
 
-        // Collect filtered items (indices only)
-        let filtered_items: Vec<usize> = self
-            .file_manager
-            .wave_data
-            .iter()
-            .enumerate()
-            .filter(|(_index, wave)| {
-                let sample_rate_ok = match self.sample_rate_filter { 
-                        WaveSampleRate::Unknown => true,
-                        WaveSampleRate::Damaged => false,
-                        _ => wave.sample_rate == self.sample_rate_filter
+        // Compute filtered items if cache is empty
+        if self.filtered_items.is_none() {
+            let filtered: Vec<WavFileData> = self
+                .file_manager
+                .wave_data
+                .iter()
+                .filter(|wave| {
+                    let sample_rate_ok = match self.sample_rate_filter {
+                            WaveSampleRate::Unknown => true,
+                            WaveSampleRate::Damaged => false,
+                            _ => wave.sample_rate == self.sample_rate_filter
+                        };
+                    let search_ok = if self.search_text.is_empty() {
+                        true
+                    } else {
+                        let search_lower = self.search_text.to_lowercase();
+                        let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
+                        path_lower.contains(&search_lower)
                     };
-                let search_ok = if self.search_text.is_empty() {
-                    true
-                } else {
-                    let search_lower = self.search_text.to_lowercase();
-                    let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
-                    path_lower.contains(&search_lower)
-                };
-                sample_rate_ok && search_ok
-            })
-            .map(|(index, _)| index)
-            .collect();
+                    sample_rate_ok && search_ok
+                })
+                .cloned()
+                .collect();
+            self.filtered_items = Some(filtered);
+        }
+
+        let filtered_items = self.filtered_items.as_ref().unwrap();
 
         // If selected file is no longer visible, deselect it
-        if let Some(selected_idx) = self.selected_index
-            && !filtered_items.contains(&selected_idx)
-        {
-            self.selected_index = None;
+        if let Some(checksum) = self.selected_checksum {
+            if !filtered_items.iter().any(|w| w.checksum == checksum) {
+                self.selected_checksum = None;
+            }
         }
 
         if filtered_items.is_empty() {
             ui.label("No .wav files matching this filter were found in the directory.");
         } else {
-            self.render_file_table(ui, filtered_items);
+            self.render_file_table(ui, filtered_items.clone());
             // HRTF metadata frame (detailed view for selected file)
             let frame = egui::Frame::group(ui.style());
             frame.show(ui, |ui| {
@@ -565,6 +594,9 @@ impl<'a> AppGUI<'a> {
             return;
         }
 
+        // Invalidate filtered items cache
+        self.filtered_items = None;
+
         // Update settings with new directory
         {
             let mut settings = self.settings.borrow_mut();
@@ -608,7 +640,12 @@ impl<'a> AppGUI<'a> {
         self.file_manager.rescan_configured_directory()?;
 
         // Update UI state
-        self.selected_index = None;
+        // Keep selected_checksum, but verify it still exists after rescan
+        if let Some(checksum) = self.selected_checksum {
+            if self.find_wave_by_checksum(checksum).is_none() {
+                self.selected_checksum = None;
+            }
+        }
         let file_count = self.file_manager.wave_data.len();
 
         // Set scan_success to true after successful scan
@@ -703,7 +740,7 @@ impl<'a> eframe::App for AppGUI<'a> {
             ui.heading("Create Virtual Device");
 
             // Determine if a file is selected
-            let is_file_selected = self.selected_index.is_some();
+            let is_file_selected = self.selected_checksum.is_some();
 
             // Add the "Write Config" and the "Delete Config" buttons
             ui.horizontal(|ui| {

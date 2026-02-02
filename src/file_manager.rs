@@ -13,15 +13,15 @@ use xxhash_rust::xxh3::xxh3_64;
 
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
-    pub wave_data: Vec<WaveFileData>,
+    pub wave_data: Vec<WavFileData>,
     /// Wavefile dir that was scanned last time.
     current_wavefile_dir: Option<PathBuf>,
     descriptions: crate::descriptions::Descriptions,
 }
 
 // All about Wav file
-#[derive(Debug, Default)]
-pub struct WaveFileData {
+#[derive(Debug, Default, Clone)]
+pub struct WavFileData {
     pub path: PathBuf,
     pub relative_path: PathBuf,
     pub sample_rate: WaveSampleRate,
@@ -168,7 +168,7 @@ impl FileManager {
                     None => path.clone(),
                 };
                 // Store absolute path with detected sample rate
-                self.wave_data.push(WaveFileData {
+                self.wave_data.push(WavFileData {
                     path,
                     relative_path,
                     ..Default::default()
