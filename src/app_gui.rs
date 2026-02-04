@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::config_manager::ConfigManager;
-use crate::file_manager::{FileManager, WaveSampleRate, WavFileData};
+use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use log::{error, info};
 
@@ -93,14 +93,7 @@ impl<'a> AppGUI<'a> {
         let theme_preference = settings.borrow().theme_preference;
         cc.egui_ctx.set_theme(theme_preference);
 
-        // If scan_success is true, perform a safe rescan on startup
-        let scan_success = settings.borrow().scan_success;
-        if scan_success {
-            // Attempt to rescan, but if it fails we keep empty lists
-            let _ = Self::safe_rescan_internal(settings.clone(), file_manager);
-        }
-
-        Self {
+        let mut result = Self {
             settings,
             file_manager,
             config_manager,
@@ -117,7 +110,12 @@ impl<'a> AppGUI<'a> {
             device_name_text,
             theme_preference,
             filtered_items: None,
+        };
+
+        if let Err(e) = result.safe_rescan() {
+            error!("Could not rescan wav directory on startup!. Reason: {}", e);
         }
+        result
     }
 
     /// Checks if Pipewire config exists and returns the path if found.
@@ -224,7 +222,10 @@ impl<'a> AppGUI<'a> {
 
     /// Find wave data by checksum.
     fn find_wave_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
-        self.file_manager.wave_data.iter().find(|w| w.checksum == checksum)
+        self.file_manager
+            .wave_data
+            .iter()
+            .find(|w| w.checksum == checksum)
     }
 
     /// Get HRTF metadata for the currently selected file, if any.
@@ -280,7 +281,9 @@ impl<'a> AppGUI<'a> {
                         let mut label_text = rel_path.to_string_lossy().to_string();
 
                         // Get HRTF metadata for this file (cheap lookup)
-                        let description_text = wave.metadata.as_ref()
+                        let description_text = wave
+                            .metadata
+                            .as_ref()
                             .map(|rc| {
                                 // Take first line of description, fallback to empty string
                                 rc.description
@@ -369,7 +372,7 @@ impl<'a> AppGUI<'a> {
                         let matches = match self.sample_rate_filter {
                             WaveSampleRate::Unknown => true,
                             WaveSampleRate::Damaged => false,
-                            _ => wave.sample_rate == self.sample_rate_filter
+                            _ => wave.sample_rate == self.sample_rate_filter,
                         };
                         if !matches {
                             self.selected_checksum = None;
@@ -408,10 +411,10 @@ impl<'a> AppGUI<'a> {
                 .iter()
                 .filter(|wave| {
                     let sample_rate_ok = match self.sample_rate_filter {
-                            WaveSampleRate::Unknown => true,
-                            WaveSampleRate::Damaged => false,
-                            _ => wave.sample_rate == self.sample_rate_filter
-                        };
+                        WaveSampleRate::Unknown => true,
+                        WaveSampleRate::Damaged => false,
+                        _ => wave.sample_rate == self.sample_rate_filter,
+                    };
                     let search_ok = if self.search_text.is_empty() {
                         true
                     } else {
@@ -477,9 +480,8 @@ impl<'a> AppGUI<'a> {
             );
             if ui.button("Select").clicked() {
                 // Create file dialog for directory selection
-                let mut dialog = FileDialog::new()
-                    .set_title("Select IR Files Directory");
-                
+                let mut dialog = FileDialog::new().set_title("Select IR Files Directory");
+
                 // Try to set starting directory from current directory_text if it's a valid path
                 let current_dir = self.directory_text.trim();
                 if !current_dir.is_empty() {
@@ -488,7 +490,7 @@ impl<'a> AppGUI<'a> {
                         dialog = dialog.set_directory(path);
                     }
                 }
-                
+
                 // Show directory picker dialog
                 if let Some(selected_folder) = dialog.pick_folder() {
                     // Update directory text field with selected path
@@ -597,16 +599,11 @@ impl<'a> AppGUI<'a> {
         // Invalidate filtered items cache
         self.filtered_items = None;
 
-        // Update settings with new directory
-        {
-            let mut settings = self.settings.borrow_mut();
-            settings.set_wav_directory(path.clone());
-        }
+        // Perform safe rescan with the new directory (safe_rescan will handle persistence)
+        // We need to set the directory in settings, but safe_rescan will temporarily set to None.
+        // However, safe_rescan expects wav_directory to already be set.
+        self.settings.borrow_mut().set_wav_directory(Some(path));
 
-        // Save settings
-        self.write_settings();
-
-        // Perform safe rescan
         match self.safe_rescan() {
             Ok(file_count) => {
                 self.message(
@@ -626,18 +623,34 @@ impl<'a> AppGUI<'a> {
         }
     }
 
-    /// Performs a safe rescan with scan_success flag management.
+    /// Performs a safe rescan. The purpose is to make sure that if
+    /// application crashes during rescan, then the faulty directory
+    /// is not saved into settings and will not be scanned on restart.
     /// Returns the number of files scanned on success, or an error.
     fn safe_rescan(&mut self) -> anyhow::Result<usize> {
-        // Set scan_success to false before scanning
-        {
-            let mut settings = self.settings.borrow_mut();
-            settings.scan_success = false;
+        // If get_wav_directory is None, skip scanning
+        let original_path = self.settings.borrow().get_wav_directory();
+        if original_path.is_none() {
+            return Ok(self.file_manager.wave_data.len());
         }
-        self.write_settings();
 
-        // Perform the actual scan
-        self.file_manager.rescan_configured_directory()?;
+        // If settings.active_wav_directory is used, simply scan
+        if !self.settings.borrow().is_wav_directory_set() {
+            self.file_manager.rescan_configured_directory()?;
+        } else {
+            // Temporarily set wav_directory to None and persist
+            self.settings.borrow_mut().set_wav_directory(None);
+            self.write_settings();
+
+            // Restore original path in memory (but not persisted yet)
+            self.settings.borrow_mut().set_wav_directory(original_path);
+
+            // Perform the actual scan
+            self.file_manager.rescan_configured_directory()?;
+
+            // Persist the directory after successful scan
+            self.write_settings();
+        }
 
         // Update UI state
         // Keep selected_checksum, but verify it still exists after rescan
@@ -648,41 +661,9 @@ impl<'a> AppGUI<'a> {
         }
         let file_count = self.file_manager.wave_data.len();
 
-        // Set scan_success to true after successful scan
-        {
-            let mut settings = self.settings.borrow_mut();
-            settings.scan_success = true;
-        }
-        self.write_settings();
+        
 
         Ok(file_count)
-    }
-
-    /// Internal helper for safe rescan that doesn't update UI.
-    /// Used by constructor.
-    fn safe_rescan_internal(
-        settings: Rc<RefCell<AppSettings>>,
-        file_manager: &mut FileManager,
-    ) -> anyhow::Result<()> {
-        // Set scan_success to false before scanning
-        {
-            let mut settings = settings.borrow_mut();
-            settings.scan_success = false;
-        }
-        // Save settings (ignore errors for now)
-        let _ = settings.borrow().save();
-
-        // Perform the actual scan
-        file_manager.rescan_configured_directory()?;
-
-        // Set scan_success to true after successful scan
-        {
-            let mut settings = settings.borrow_mut();
-            settings.scan_success = true;
-        }
-        let _ = settings.borrow().save();
-
-        Ok(())
     }
 
     /// Handles the "Apply" button click for virtual device name.

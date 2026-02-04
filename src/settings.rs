@@ -22,10 +22,6 @@ pub struct AppSettings {
     /// UI theme preference (Light, Dark, or follow system)
     pub theme_preference: ThemePreference,
 
-    /// Whether the currently configured directory has been successfully scanned
-    #[serde(default)]
-    pub scan_success: bool,
-
     /// Active WAV directory (runtime only, not persisted)
     #[serde(skip)]
     active_wav_directory: Option<PathBuf>,
@@ -41,7 +37,6 @@ impl Default for AppSettings {
             wav_directory: None,
             virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
             theme_preference: ThemePreference::System,
-            scan_success: false,
             active_wav_directory: None,
             dev_mode: false,
         }
@@ -127,14 +122,16 @@ impl AppSettings {
     }
 
     /// Set the WAV directory
-    pub fn set_wav_directory(&mut self, path: PathBuf) {
-        self.wav_directory = Some(path);
+    pub fn set_wav_directory(&mut self, path: Option<PathBuf>) {
+        self.wav_directory = path;
         self.active_wav_directory = None;
-        self.scan_success = false;
     }
     /// Set temporary WAV directory
     pub fn set_temp_wav_directory(&mut self, path: PathBuf) {
         self.active_wav_directory = Some(path);
+    }
+    pub fn is_wav_directory_set(&self) -> bool {
+        self.wav_directory.is_some()
     }
 }
 
