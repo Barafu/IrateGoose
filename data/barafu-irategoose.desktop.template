@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=IrateGoose
+Comment=GUI to configure virtual surround sound capabilities of Pipewire
+Exec={EXEC}
+Icon=barafu-irategoose
+Categories=AudioVideo;Audio;
+Terminal=false
+StartupNotify=true

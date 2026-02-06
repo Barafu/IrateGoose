@@ -2,10 +2,11 @@ mod app_gui;
 mod config_manager;
 mod descriptions;
 mod file_manager;
+mod goose;
 mod icon_loader;
 mod settings;
 
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use log::error;
 use std::cell::RefCell;
 use std::process::Command;
@@ -22,14 +23,23 @@ use file_manager::FileManager;
 /// Command line arguments
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
+#[command(group = ArgGroup::new("install_uninstall").multiple(false).conflicts_with_all(["path"]))]
 struct CliArgs {
     /// Path to directory containing WAV files
-    #[arg(value_name = "PATH")]
+    #[arg(long)]
     path: Option<PathBuf>,
 
     /// Dev-mode (hidden),makes app to write Pipewire config in /tmp instead of proper placement.
     #[arg(long, hide = true)]
     dev_mode: bool,
+
+    /// Install the application to the system menu
+    #[arg(long, group = "install_uninstall")]
+    install: bool,
+
+    /// Remove the application from the system menu
+    #[arg(long, group = "install_uninstall")]
+    uninstall: bool,
 }
 
 fn main() {
@@ -38,6 +48,22 @@ fn main() {
 
     // Parse CLI arguments
     let args = CliArgs::parse();
+
+    // Handle install/uninstall commands (exclusive with other arguments)
+    if args.install {
+        if let Err(e) = goose::install_goose() {
+            log::error!("Installation failed: {}", e);
+            process::exit(1);
+        }
+        process::exit(0);
+    }
+    if args.uninstall {
+        if let Err(e) = goose::uninstall_goose() {
+            log::error!("Uninstallation failed: {}", e);
+            process::exit(1);
+        }
+        process::exit(0);
+    }
 
     // Create a temporary settings instance with the determined dev mode
     let mut temp_settings = AppSettings::default();

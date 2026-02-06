@@ -51,6 +51,14 @@ pub struct AppGUI<'a> {
     theme_preference: eframe::egui::ThemePreference,
     // Cached filtered items (None when dirty)
     filtered_items: Option<Vec<WavFileData>>,
+    // Row index to scroll to (None if no scroll requested)
+    scroll_to_row: Option<usize>,
+    // Whether we have already attempted auto‑selection at startup
+    has_auto_selected: bool,
+    // Whether we should scroll to the configured file after a filter change
+    scroll_on_filter_change: bool,
+    // Whether the user has ever manually selected a file (clicked a row)
+    user_has_manually_selected: bool,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -111,6 +119,10 @@ impl<'a> AppGUI<'a> {
             device_name_text,
             theme_preference,
             filtered_items: None,
+            scroll_to_row: None,
+            has_auto_selected: false,
+            scroll_on_filter_change: false,
+            user_has_manually_selected: false,
         };
 
         if let Err(e) = result.safe_rescan() {
@@ -256,7 +268,11 @@ impl<'a> AppGUI<'a> {
             let num_rows = filtered_items.len();
             let available_width = ui.available_width();
             let available_height: f32 = ui.available_height() - Self::METADATA_FRAME_HEIGHT;
-            TableBuilder::new(ui)
+
+            // Take the scroll request (if any) so we don't scroll again next frame
+            let scroll_row = self.scroll_to_row.take();
+
+            let mut table_builder = TableBuilder::new(ui)
                 .column(Column::initial(available_width * 0.6)) // "Files" column - auto width
                 .column(Column::remainder().clip(true)) // "Description" column - takes remaining width
                 .max_scroll_height(available_height)
@@ -264,7 +280,14 @@ impl<'a> AppGUI<'a> {
                 .resizable(true)
                 .striped(true)
                 .sense(egui::Sense::click()) // Make rows clickable
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center)) // Center content vertically
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center)); // Center content vertically
+
+            // Apply scroll if requested
+            if let Some(row) = scroll_row {
+                table_builder = table_builder.scroll_to_row(row, None);
+            }
+
+            table_builder
                 .header(20.0, |mut header| {
                     header.col(|ui| {
                         ui.heading("Files");
@@ -334,6 +357,7 @@ impl<'a> AppGUI<'a> {
                         // Handle row click
                         if row.response().clicked() {
                             self.selected_checksum = Some(wave.checksum);
+                            self.user_has_manually_selected = true;
                         }
                     });
                 });
@@ -385,6 +409,8 @@ impl<'a> AppGUI<'a> {
                 }
                 // Invalidate cached filtered items
                 self.filtered_items = None;
+                // Request scroll to configured file if it becomes visible
+                self.scroll_on_filter_change = true;
             }
         });
 
@@ -401,6 +427,7 @@ impl<'a> AppGUI<'a> {
             // If search text changed, invalidate cache
             if old_search != self.search_text {
                 self.filtered_items = None;
+                self.scroll_on_filter_change = true;
             }
         });
 
@@ -432,11 +459,42 @@ impl<'a> AppGUI<'a> {
 
         let filtered_items = self.filtered_items.as_ref().unwrap();
 
+        // Auto‑select configured file on first render (if applicable)
+        if !self.has_auto_selected {
+            // Valid configured file?
+            if let Some(config_checksum) = self.config_installed
+                && config_checksum != 0
+                && self.selected_checksum.is_none()
+            {
+                if let Some(index) = filtered_items.iter().position(|w| w.checksum == config_checksum) {
+                    self.selected_checksum = Some(config_checksum);
+                    self.scroll_to_row = Some(index);
+                }
+            }
+            self.has_auto_selected = true;
+        }
+
         // If selected file is no longer visible, deselect it
         if let Some(checksum) = self.selected_checksum
             && !filtered_items.iter().any(|w| w.checksum == checksum)
         {
             self.selected_checksum = None;
+        }
+
+        // Scroll to configured file after a filter change (if it's visible)
+        if self.scroll_on_filter_change {
+            self.scroll_on_filter_change = false;
+            if let Some(config_checksum) = self.config_installed
+                && config_checksum != 0
+            {
+                if let Some(index) = filtered_items.iter().position(|w| w.checksum == config_checksum) {
+                    // Select the configured file if nothing is selected AND user hasn't manually selected before
+                    if self.selected_checksum.is_none() && !self.user_has_manually_selected {
+                        self.selected_checksum = Some(config_checksum);
+                    }
+                    self.scroll_to_row = Some(index);
+                }
+            }
         }
 
         if filtered_items.is_empty() {

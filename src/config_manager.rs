@@ -19,7 +19,7 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     /// The config file template
-    const CONFIG_TEMPLATE: &'static str = include_str!("../sink_template.conf");
+    const CONFIG_TEMPLATE: &'static str = include_str!("../virtual_device.conf.template");
 
     /// Creates a new ConfigManager instance
     pub fn new(settings: Rc<RefCell<AppSettings>>) -> Result<ConfigManager> {
@@ -66,9 +66,9 @@ impl ConfigManager {
 
         // Create text for config file using the copied file's absolute path
         let config_text = Self::CONFIG_TEMPLATE
-            .replace("IRFILETEMPLATE", target_path.to_string_lossy().as_ref())
+            .replace("{IRFILETEMPLATE}", target_path.to_string_lossy().as_ref())
             .replace(
-                "DEVICENAMETEMPLATE",
+                "{DEVICENAMETEMPLATE}",
                 &self.settings.borrow().virtual_device_name,
             );
 
