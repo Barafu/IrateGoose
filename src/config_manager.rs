@@ -46,21 +46,46 @@ impl ConfigManager {
 
     /// Writes the updated configuration to the config path
     pub fn write_config(&self, wavefile_path: &Path) -> Result<()> {
-        //Create text for config file
+        // Determine the hrir directory (sibling of config file)
+        let hrir_dir = self.config_path
+            .parent()
+            .ok_or_else(|| anyhow!("Config path has no parent directory"))?
+            .join("hrir");
+
+        // Remove all existing files in the hrir directory
+        let _ = fs::remove_dir_all(&hrir_dir);
+
+        // Ensure the hrir directory exists
+        fs::create_dir_all(&hrir_dir)
+            .with_context(|| format!("Failed to create hrir directory {}", hrir_dir.display()))?;
+
+        // Copy the selected WAV file into the hrir directory, preserving its filename
+        let target_path = self.copy_wav_to_hrir(wavefile_path, &hrir_dir)?;
+
+        // Create text for config file using the copied file's absolute path
         let config_text = Self::CONFIG_TEMPLATE
-            .replace("IRFILETEMPLATE", wavefile_path.to_string_lossy().as_ref())
+            .replace("IRFILETEMPLATE", target_path.to_string_lossy().as_ref())
             .replace("DEVICENAMETEMPLATE", &self.settings.borrow().virtual_device_name);
-        // Ensure the parent directory exists
+
+        // Ensure the parent directory of the config file exists
         if let Some(parent) = self.config_path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
 
-        fs::write(&self.config_path, config_text)
-            .with_context(|| format!("Failed to write config to {}", self.config_path.display()))?;
+        // Write the config file
+        if let Err(e) = fs::write(&self.config_path, config_text) {
+            // If writing fails, delete any partially written config file.
+            let _ = fs::remove_file(&self.config_path);
+            return Err(e).with_context(|| format!("Failed to write config to {}", self.config_path.display()));
+        }
 
         // Restart services to apply the new config
-        self.apply_config()?;
+        if let Err(e) = self.apply_config() {
+            // If service restart fails, the config may be unreliable; delete it.
+            let _ = fs::remove_file(&self.config_path);
+            return Err(e);
+        }
 
         Ok(())
     }
@@ -97,6 +122,24 @@ impl ConfigManager {
         Self::extract_filename_from_config(&content)
             .map(Some)
             .map_err(|e| format!("Failed to parse config: {}", e))
+    }
+
+    /// Copies a WAV file into the hrir directory, preserving the filename.
+    /// Returns the absolute path of the copied file.
+    fn copy_wav_to_hrir(&self, source: &Path, hrir_dir: &Path) -> Result<PathBuf> {
+        let filename = source
+            .file_name()
+            .ok_or_else(|| anyhow!("Source path has no filename"))?;
+        let target = hrir_dir.join(filename);
+        fs::copy(source, &target)
+            .with_context(|| {
+                format!(
+                    "Failed to copy {} to {}",
+                    source.display(),
+                    target.display()
+                )
+            })?;
+        Ok(target)
     }
 
     /// Extracts the filename from config content
