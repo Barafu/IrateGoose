@@ -34,8 +34,9 @@ pub struct AppGUI<'a> {
     selected_checksum: Option<u64>,
     // Currently selected sample rate filter
     sample_rate_filter: WaveSampleRate,
-    // Path to WAV file set in installed Pipewire config file if any
-    config_installed: Option<PathBuf>,
+    // Checksum of the WAV file set in installed Pipewire config file if any
+    // None = no config, Some(0) = config exists but file is damaged, Some(nonzero) = valid checksum
+    config_installed: Option<u64>,
     // Status bar message
     status_message: String,
     // Search filter text
@@ -118,11 +119,11 @@ impl<'a> AppGUI<'a> {
         result
     }
 
-    /// Checks if Pipewire config exists and returns the path if found.
+    /// Checks if Pipewire config exists and returns the checksum if found.
     /// Returns None if config doesn't exist or there's an error.
-    fn check_config_exists(config_manager: &ConfigManager) -> Option<PathBuf> {
+    fn check_config_exists(config_manager: &ConfigManager) -> Option<u64> {
         match config_manager.config_exists() {
-            Ok(Some(path)) => Some(path),
+            Ok(Some(checksum)) => Some(checksum),
             Ok(None) => None,
             Err(e) => {
                 error!("Error checking config: {}", e);
@@ -144,14 +145,14 @@ impl<'a> AppGUI<'a> {
             let display_path = absolute_path.display().to_string();
             match self.config_manager.write_config(absolute_path) {
                 Ok(()) => {
-                    // Double-check that config was written correctly and extract the path from config
+                    // Double-check that config was written correctly and extract the checksum from config
                     match self.config_manager.config_exists() {
-                        Ok(Some(config_path)) => {
+                        Ok(Some(checksum)) => {
                             self.message(
                                 MessageLevel::Normal,
                                 &format!("Config written using {}", display_path),
                             );
-                            self.config_installed = Some(config_path);
+                            self.config_installed = Some(checksum);
                         }
                         Ok(None) => {
                             // Config file doesn't exist after writing - something went wrong
@@ -432,10 +433,10 @@ impl<'a> AppGUI<'a> {
         let filtered_items = self.filtered_items.as_ref().unwrap();
 
         // If selected file is no longer visible, deselect it
-        if let Some(checksum) = self.selected_checksum {
-            if !filtered_items.iter().any(|w| w.checksum == checksum) {
-                self.selected_checksum = None;
-            }
+        if let Some(checksum) = self.selected_checksum
+            && !filtered_items.iter().any(|w| w.checksum == checksum)
+        {
+            self.selected_checksum = None;
         }
 
         if filtered_items.is_empty() {
@@ -654,14 +655,12 @@ impl<'a> AppGUI<'a> {
 
         // Update UI state
         // Keep selected_checksum, but verify it still exists after rescan
-        if let Some(checksum) = self.selected_checksum {
-            if self.find_wave_by_checksum(checksum).is_none() {
-                self.selected_checksum = None;
-            }
+        if let Some(checksum) = self.selected_checksum
+            && self.find_wave_by_checksum(checksum).is_none()
+        {
+            self.selected_checksum = None;
         }
         let file_count = self.file_manager.wave_data.len();
-
-        
 
         Ok(file_count)
     }
@@ -725,9 +724,16 @@ impl<'a> eframe::App for AppGUI<'a> {
 
             // Add the "Write Config" and the "Delete Config" buttons
             ui.horizontal(|ui| {
+                ui.style_mut().spacing.button_padding = (8.0, 6.0).into();
                 // The "Write config" button should be disabled if no file is selected
-                let write_button =
-                    ui.add_enabled(is_file_selected, egui::Button::new("Create device"));
+                let write_button = ui.add_enabled(
+                    is_file_selected,
+                    egui::Button::new(
+                        egui::RichText::new("💾 Create device").heading()
+                    )
+                    //.fill(egui::Color32::from_rgb(0, 123, 255))
+                    //.min_size(egui::vec2(200.0, 40.0))
+                );
                 if write_button.clicked() {
                     self.on_write_config_click();
                 }
@@ -735,10 +741,11 @@ impl<'a> eframe::App for AppGUI<'a> {
                     write_button.on_hover_text("Select a IR file to proceed.");
                 }
 
+                ui.style_mut().spacing.button_padding = (6.0, 4.0).into();
                 // The "Delete config" button should be disabled if config is not installed
                 let delete_button = ui.add_enabled(
                     self.config_installed.is_some(),
-                    egui::Button::new("Remove device"),
+                    egui::Button::new("❌ Remove device"),
                 );
                 if delete_button.clicked() {
                     self.on_delete_config_click();
@@ -746,9 +753,19 @@ impl<'a> eframe::App for AppGUI<'a> {
             });
 
             // Display current config status
-            match &self.config_installed {
-                Some(path) => {
-                    ui.label(format!("Current IR file: {}", path.display()));
+            match self.config_installed {
+                Some(0) => {
+                    ui.label(egui::RichText::new("Warning: The configured IR file is damaged.")
+                        .color(egui::Color32::RED));
+                }
+                Some(checksum) => {
+                    if let Some(wave) = self.find_wave_by_checksum(checksum) {
+                        ui.label(format!("Current IR file: {}", wave.relative_path.display()));
+                    } else {
+                        ui.label(egui::RichText::new("Warning: The configured IR file is not found in the current IR directory.")
+                            .color(egui::Color32::RED))
+                            .on_hover_text("If you create a new virtual device, the content of the IR file currently used will be lost.");
+                    }
                 }
                 None => {
                     ui.label("No config installed");

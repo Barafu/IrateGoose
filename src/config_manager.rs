@@ -6,6 +6,7 @@ use std::process::Command;
 use std::rc::Rc;
 
 use crate::settings::AppSettings;
+use xxhash_rust::xxh3::xxh3_64;
 
 /// Manages PipeWire configuration files, NOT application configuration.
 /// This class handles creation, deletion, and application of PipeWire config files
@@ -47,7 +48,8 @@ impl ConfigManager {
     /// Writes the updated configuration to the config path
     pub fn write_config(&self, wavefile_path: &Path) -> Result<()> {
         // Determine the hrir directory (sibling of config file)
-        let hrir_dir = self.config_path
+        let hrir_dir = self
+            .config_path
             .parent()
             .ok_or_else(|| anyhow!("Config path has no parent directory"))?
             .join("hrir");
@@ -65,7 +67,10 @@ impl ConfigManager {
         // Create text for config file using the copied file's absolute path
         let config_text = Self::CONFIG_TEMPLATE
             .replace("IRFILETEMPLATE", target_path.to_string_lossy().as_ref())
-            .replace("DEVICENAMETEMPLATE", &self.settings.borrow().virtual_device_name);
+            .replace(
+                "DEVICENAMETEMPLATE",
+                &self.settings.borrow().virtual_device_name,
+            );
 
         // Ensure the parent directory of the config file exists
         if let Some(parent) = self.config_path.parent() {
@@ -77,7 +82,9 @@ impl ConfigManager {
         if let Err(e) = fs::write(&self.config_path, config_text) {
             // If writing fails, delete any partially written config file.
             let _ = fs::remove_file(&self.config_path);
-            return Err(e).with_context(|| format!("Failed to write config to {}", self.config_path.display()));
+            return Err(e).with_context(|| {
+                format!("Failed to write config to {}", self.config_path.display())
+            });
         }
 
         // Restart services to apply the new config
@@ -105,11 +112,11 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Checks if the config file exists and returns the wavefile path if found
-    /// Returns Ok(Some(PathBuf)) if config exists and contains a valid filename
-    /// Returns Ok(None) if config file does not exist
-    /// Returns Err(String) if config exists but cannot be read or parsed
-    pub fn config_exists(&self) -> Result<Option<PathBuf>, String> {
+    /// Checks if the config file exists and returns the checksum of the configured WAV file.
+    /// Returns Ok(Some(u64)) if config exists and contains a valid filename; checksum is 0 if file is damaged.
+    /// Returns Ok(None) if config file does not exist.
+    /// Returns Err(String) if config exists but cannot be read or parsed.
+    pub fn config_exists(&self) -> Result<Option<u64>, String> {
         if !self.config_path.exists() {
             return Ok(None);
         }
@@ -118,10 +125,24 @@ impl ConfigManager {
         let content = fs::read_to_string(&self.config_path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-        // Search for filename pattern in the config
-        Self::extract_filename_from_config(&content)
-            .map(Some)
-            .map_err(|e| format!("Failed to parse config: {}", e))
+        // Extract filename from config
+        let file_path = Self::extract_filename_from_config(&content)
+            .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+        // Compute checksum of the referenced WAV file
+        let checksum = match fs::read(&file_path) {
+            Ok(data) => {
+                // Basic WAV header check (optional)
+                if data.len() >= 28 && &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
+                    xxh3_64(&data)
+                } else {
+                    0 // Damaged or not a WAV
+                }
+            }
+            Err(_) => 0, // File missing or unreadable
+        };
+
+        Ok(Some(checksum))
     }
 
     /// Copies a WAV file into the hrir directory, preserving the filename.
@@ -131,14 +152,13 @@ impl ConfigManager {
             .file_name()
             .ok_or_else(|| anyhow!("Source path has no filename"))?;
         let target = hrir_dir.join(filename);
-        fs::copy(source, &target)
-            .with_context(|| {
-                format!(
-                    "Failed to copy {} to {}",
-                    source.display(),
-                    target.display()
-                )
-            })?;
+        fs::copy(source, &target).with_context(|| {
+            format!(
+                "Failed to copy {} to {}",
+                source.display(),
+                target.display()
+            )
+        })?;
         Ok(target)
     }
 

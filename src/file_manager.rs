@@ -41,7 +41,10 @@ pub enum WaveSampleRate {
 }
 
 impl FileManager {
-    pub fn new(settings: Rc<RefCell<AppSettings>>, descriptions: crate::descriptions::Descriptions) -> FileManager {
+    pub fn new(
+        settings: Rc<RefCell<AppSettings>>,
+        descriptions: crate::descriptions::Descriptions,
+    ) -> FileManager {
         FileManager {
             settings,
             wave_data: Vec::new(),
@@ -68,20 +71,26 @@ impl FileManager {
             checksum: u64,
         }
         // Copy all file paths, keeping the order
-        let paths: Vec<PathBuf> = self.wave_data.iter().map(|w|w.path.clone()).collect();
+        let paths: Vec<PathBuf> = self.wave_data.iter().map(|w| w.path.clone()).collect();
         // Multithreaded scan of files to collect metadata
-        let metarecords: Vec<FileMetadataRecord> = paths.par_iter().map(|path| {
-            let (samplerate, checksum) = Self::detect_sample_rate_and_checksum(path);
-            FileMetadataRecord {
-                samplerate,
-                checksum,
-            }
-        }).collect();
+        let metarecords: Vec<FileMetadataRecord> = paths
+            .par_iter()
+            .map(|path| {
+                let (samplerate, checksum) = Self::detect_sample_rate_and_checksum(path);
+                FileMetadataRecord {
+                    samplerate,
+                    checksum,
+                }
+            })
+            .collect();
         // Copy collected metadta back to wave data
-        self.wave_data.iter_mut().zip(metarecords.iter()).for_each(|d|{
-            d.0.sample_rate = d.1.samplerate;
-            d.0.checksum = d.1.checksum;
-        });
+        self.wave_data
+            .iter_mut()
+            .zip(metarecords.iter())
+            .for_each(|d| {
+                d.0.sample_rate = d.1.samplerate;
+                d.0.checksum = d.1.checksum;
+            });
 
         // Sort entries: HeSuVi entries first, then alphabetically by path
         self.wave_data.sort_by(|a, b| {
@@ -97,16 +106,13 @@ impl FileManager {
 
         // Populate metadata from descriptions
         for wave in &mut self.wave_data {
-            let stem = wave.path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("");
+            let stem = wave.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             wave.metadata = self.descriptions.get_rc(stem);
         }
 
         self.wave_data.shrink_to_fit();
         Ok(())
     }
-
 
     fn detect_sample_rate_and_checksum(path: &Path) -> (WaveSampleRate, u64) {
         // Read entire file

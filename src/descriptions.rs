@@ -200,11 +200,17 @@ mod tests {
             Some(Configuration::Headphones),
             "Configuration mismatch"
         );
-        assert_eq!(entry_rc.description, "Human subject", "Description mismatch");
+        assert_eq!(
+            entry_rc.description, "Human subject",
+            "Description mismatch"
+        );
         assert_eq!(entry_rc.points, Some(170), "Points mismatch (expected 170)");
 
         // Optional: Also verify that source and credits are not empty (if they should contain data)
-        assert!(!entry_rc.source.is_empty(), "Source field should not be empty");
+        assert!(
+            !entry_rc.source.is_empty(),
+            "Source field should not be empty"
+        );
         assert!(
             !entry_rc.credits.is_empty(),
             "Credits field should not be empty"
