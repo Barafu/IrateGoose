@@ -56,12 +56,6 @@ pub struct AppGUI<'a> {
     theme_preference: eframe::egui::ThemePreference,
     // Row index to scroll to (None if no scroll requested)
     scroll_to_row: Option<usize>,
-    // Whether we have already attempted auto‑selection at startup
-    //has_auto_selected: bool,
-    // Whether we should scroll to the configured file after a filter change
-    //scroll_on_filter_change: bool,
-    // Whether the user has ever manually selected a file (clicked a row)
-    user_has_manually_selected: bool,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -124,7 +118,6 @@ impl<'a> AppGUI<'a> {
             theme_preference,
             filtered_wav_index: None,
             scroll_to_row: None,
-            user_has_manually_selected: false,
         };
 
         if let Err(e) = result.safe_rescan() {
@@ -257,6 +250,32 @@ impl<'a> AppGUI<'a> {
         format!("{}...", truncated.trim_end())
     }
 
+    /// Auto‑select the file that matches the installed config (if any).
+    fn apply_auto_selection(&mut self) {
+        let old_checksum = self.selected_checksum;
+        match self.config_installed {
+            Some(checksum) if checksum != 0 => {
+                if self.find_wav_by_checksum(checksum).is_some() {
+                    self.selected_checksum = Some(checksum);
+                } else {
+                    self.selected_checksum = None;
+                }
+            }
+            _ => {
+                self.selected_checksum = None;
+            }
+        }
+        // If selection changed (or newly selected) and we have a filtered index,
+        // scroll to the selected row if it's present in the filtered list.
+        if self.selected_checksum != old_checksum && self.selected_checksum.is_some() {
+            if let Some(filtered) = self.filtered_wav_index.as_ref() {
+                if let Some(row) = filtered.index_of_checksum(self.selected_checksum.unwrap()) {
+                    self.scroll_to_row = Some(row);
+                }
+            }
+        }
+    }
+
     /// Gives access to filtered items index, recreating it if it is None.
     fn get_filtered_items(&mut self) -> &WavFileIndex {
         if self.filtered_wav_index.is_some() {
@@ -278,6 +297,12 @@ impl<'a> AppGUI<'a> {
             sample_rate_ok && search_ok
         };
         self.filtered_wav_index = Some(self.all_wav_index.filtered_clone(filter_predicate));
+        // After recreating the filtered index, scroll to the selected row if present
+        if let Some(checksum) = self.selected_checksum {
+            if let Some(row) = self.filtered_wav_index.as_ref().unwrap().index_of_checksum(checksum) {
+                self.scroll_to_row = Some(row);
+            }
+        }
         self.filtered_wav_index.as_ref().unwrap()
     }
 
@@ -383,7 +408,6 @@ impl<'a> AppGUI<'a> {
                         // Handle row click
                         if row.response().clicked() {
                             self.selected_checksum = Some(wave.checksum);
-                            self.user_has_manually_selected = true;
                         }
                     });
                 });
@@ -661,6 +685,8 @@ impl<'a> AppGUI<'a> {
         {
             self.selected_checksum = None;
         }
+        // Auto‑select the file that matches the installed config (if any)
+        self.apply_auto_selection();
         Ok(())
     }
 

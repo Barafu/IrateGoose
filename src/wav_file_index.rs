@@ -81,6 +81,16 @@ impl WavFileIndex {
             .and_then(|&idx| self.items.get(idx))
     }
 
+    /// Returns the index (position) of the item with the given checksum, if it exists.
+    ///
+    /// Returns `None` for `checksum == 0` or if the checksum is not present in the index.
+    pub fn index_of_checksum(&self, checksum: u64) -> Option<usize> {
+        if checksum == 0 {
+            return None;
+        }
+        self.checksum_index.get(&checksum).copied()
+    }
+
     /// Returns an iterator over the stored items.
     pub fn iter(&self) -> std::slice::Iter<'_, WavFileData> {
         self.items.iter()
