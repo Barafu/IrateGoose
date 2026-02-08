@@ -260,25 +260,25 @@ impl<'a> AppGUI<'a> {
     /// Gives access to filtered items index, recreating it if it is None.
     fn get_filtered_items(&mut self) -> &WavFileIndex {
         if self.filtered_wav_index.is_some() {
-            return &self.filtered_wav_index.as_ref().unwrap();
+            return self.filtered_wav_index.as_ref().unwrap();
         }
         let filter_predicate = |wave: &&WavFileData| {
-                    let sample_rate_ok = match self.sample_rate_filter {
-                        WaveSampleRate::Unknown => true,
-                        WaveSampleRate::Damaged => false,
-                        _ => wave.sample_rate == self.sample_rate_filter,
-                    };
-                    let search_ok = if self.search_text.is_empty() {
-                        true
-                    } else {
-                        let search_lower = self.search_text.to_lowercase();
-                        let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
-                        path_lower.contains(&search_lower)
-                    };
-                    sample_rate_ok && search_ok
-                };
+            let sample_rate_ok = match self.sample_rate_filter {
+                WaveSampleRate::Unknown => true,
+                WaveSampleRate::Damaged => false,
+                _ => wave.sample_rate == self.sample_rate_filter,
+            };
+            let search_ok = if self.search_text.is_empty() {
+                true
+            } else {
+                let search_lower = self.search_text.to_lowercase();
+                let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
+                path_lower.contains(&search_lower)
+            };
+            sample_rate_ok && search_ok
+        };
         self.filtered_wav_index = Some(self.all_wav_index.filtered_clone(filter_predicate));
-        return &self.filtered_wav_index.as_ref().unwrap(); 
+        self.filtered_wav_index.as_ref().unwrap()
     }
 
     /// Renders the file table with two columns: "Files" and "Description".
@@ -292,7 +292,6 @@ impl<'a> AppGUI<'a> {
             let available_width = ui.available_width();
             let available_height: f32 = ui.available_height() - Self::METADATA_FRAME_HEIGHT;
 
-            
             let mut table_builder = TableBuilder::new(ui)
                 .column(Column::initial(available_width * 0.6)) // "Files" column - auto width
                 .column(Column::remainder().clip(true)) // "Description" column - takes remaining width
@@ -304,7 +303,7 @@ impl<'a> AppGUI<'a> {
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center)); // Center content vertically
 
             // Take the scroll request (if any) so we don't scroll again next frame
-            let scroll_row = self.scroll_to_row.take();    
+            let scroll_row = self.scroll_to_row.take();
             // Apply scroll if requested
             if let Some(row) = scroll_row {
                 table_builder = table_builder.scroll_to_row(row, None);
@@ -323,7 +322,10 @@ impl<'a> AppGUI<'a> {
                     // Table rows are generated here
                     body.rows(row_height, num_rows, |mut row| {
                         let selected_checksum: Option<u64> = self.selected_checksum;
-                        let wave: &WavFileData = self.get_filtered_items().get_by_index(row.index()).expect("Index out of bounds in table.rows()");
+                        let wave: &WavFileData = self
+                            .get_filtered_items()
+                            .get_by_index(row.index())
+                            .expect("Index out of bounds in table.rows()");
                         let rel_path: &PathBuf = &wave.relative_path;
                         let is_selected: bool = selected_checksum == Some(wave.checksum);
                         let mut label_text: String = rel_path.to_string_lossy().to_string();
@@ -434,20 +436,6 @@ impl<'a> AppGUI<'a> {
                 self.filtered_wav_index = None;
             }
         });
-        
-
-
-        // If selected file is no longer visible, deselect it
-        if self.selected_checksum.is_some(){
-            let selected_checksum = self.selected_checksum.unwrap();
-            if self.get_filtered_items().get_by_checksum(selected_checksum).is_none()
-                {
-                self.selected_checksum = None;
-                }
-            }
-
-
-
 
         if self.get_filtered_items().len() == 0 {
             ui.label("No .wav files matching this filter were found in the directory.");
@@ -621,7 +609,8 @@ impl<'a> AppGUI<'a> {
                     MessageLevel::Normal,
                     &format!(
                         "Scanned IR directory: {} ({} files found)",
-                        dir_text, self.all_wav_index.len()
+                        dir_text,
+                        self.all_wav_index.len()
                     ),
                 );
             }
@@ -646,7 +635,6 @@ impl<'a> AppGUI<'a> {
             self.all_wav_index.clear();
             return Ok(());
         }
-
 
         // If settings.active_wav_directory is used, simply scan
         if !self.settings.borrow().is_wav_directory_set() {

@@ -35,11 +35,10 @@ fn determine_executable() -> Result<String> {
 
     if which_output.status.success() {
         let path_str = String::from_utf8_lossy(&which_output.stdout).trim().to_string();
-        if let Ok(which_path) = PathBuf::from(&path_str).canonicalize() {
-            if which_path == current_exe {
+        if let Ok(which_path) = PathBuf::from(&path_str).canonicalize()
+            && which_path == current_exe {
                 return Ok(binary_name);
             }
-        }
     }
 
     // Fallback to absolute path
