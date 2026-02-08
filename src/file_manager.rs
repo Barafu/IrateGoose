@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rayon::prelude::*;
 use std::cell::RefCell;
+use std::mem;
 use std::rc::Rc;
 use std::{
     fs,
@@ -9,11 +10,13 @@ use std::{
 
 use crate::descriptions::HRTFMetadata;
 use crate::settings::AppSettings;
+use crate::wav_file_index::WavFileIndex;
 use xxhash_rust::xxh3::xxh3_64;
 
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
-    pub wave_data: Vec<WavFileData>,
+    /// Temporary storage for scan time. 
+    scanning_wave_data: Vec<WavFileData>,
     /// Wavefile dir that was scanned last time.
     current_wavefile_dir: Option<PathBuf>,
     descriptions: crate::descriptions::Descriptions,
@@ -47,20 +50,20 @@ impl FileManager {
     ) -> FileManager {
         FileManager {
             settings,
-            wave_data: Vec::new(),
+            scanning_wave_data: Vec::new(),
             current_wavefile_dir: None,
             descriptions,
         }
     }
 
     /// Searches for WAV files inside the wavefile_dir, and read info from the files it found.
-    pub fn rescan_configured_directory(&mut self) -> Result<()> {
+    pub fn rescan_configured_directory(&mut self) -> Result<WavFileIndex> {
         // Detect WAV files
-        self.wave_data.clear();
+        self.scanning_wave_data.clear();
         self.current_wavefile_dir = self.settings.borrow().get_wav_directory();
         let working_path = match self.current_wavefile_dir.clone() {
             Some(dir) => dir,
-            None => return Ok(()), // No directory configured, nothing to scan
+            None => return Ok(WavFileIndex::new()), // No directory configured, nothing to scan
         };
         self.scan_directory(&working_path)?;
 
@@ -71,7 +74,7 @@ impl FileManager {
             checksum: u64,
         }
         // Copy all file paths, keeping the order
-        let paths: Vec<PathBuf> = self.wave_data.iter().map(|w| w.path.clone()).collect();
+        let paths: Vec<PathBuf> = self.scanning_wave_data.iter().map(|w| w.path.clone()).collect();
         // Multithreaded scan of files to collect metadata
         let metarecords: Vec<FileMetadataRecord> = paths
             .par_iter()
@@ -84,7 +87,7 @@ impl FileManager {
             })
             .collect();
         // Copy collected metadta back to wave data
-        self.wave_data
+        self.scanning_wave_data
             .iter_mut()
             .zip(metarecords.iter())
             .for_each(|d| {
@@ -93,7 +96,7 @@ impl FileManager {
             });
 
         // Sort entries: HeSuVi entries first, then alphabetically by path
-        self.wave_data.sort_by(|a, b| {
+        self.scanning_wave_data.sort_by(|a, b| {
             let a_is_hesuvi = a.path.to_string_lossy().contains("HeSuVi/");
             let b_is_hesuvi = b.path.to_string_lossy().contains("HeSuVi/");
 
@@ -105,13 +108,16 @@ impl FileManager {
         });
 
         // Populate metadata from descriptions
-        for wave in &mut self.wave_data {
+        for wave in &mut self.scanning_wave_data {
             let stem = wave.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             wave.metadata = self.descriptions.get_rc(stem);
         }
 
-        self.wave_data.shrink_to_fit();
-        Ok(())
+        //Construct WaveFileIndex and return it
+        let wavdata = mem::take(&mut self.scanning_wave_data);
+        let mut wav_index = WavFileIndex::from_vec(wavdata);
+        wav_index.shrink_to_fit();
+        Ok(wav_index)
     }
 
     fn detect_sample_rate_and_checksum(path: &Path) -> (WaveSampleRate, u64) {
@@ -174,7 +180,7 @@ impl FileManager {
                     None => path.clone(),
                 };
                 // Store absolute path with detected sample rate
-                self.wave_data.push(WavFileData {
+                self.scanning_wave_data.push(WavFileData {
                     path,
                     relative_path,
                     ..Default::default()

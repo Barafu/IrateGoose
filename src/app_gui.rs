@@ -8,6 +8,7 @@ use std::rc::Rc;
 use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
+use crate::wav_file_index::WavFileIndex;
 use log::{error, info};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -28,6 +29,10 @@ pub struct AppGUI<'a> {
     file_manager: &'a mut FileManager,
     // Manages writing Pipewire configuration
     config_manager: &'a ConfigManager,
+    // Contains data about WAV files
+    all_wav_index: WavFileIndex,
+    // Cached filtered items (None when dirty)
+    filtered_wav_index: Option<WavFileIndex>,
 
     // === UI state ===
     // Checksum of selected file (None if none selected)
@@ -49,14 +54,12 @@ pub struct AppGUI<'a> {
     device_name_text: String,
     // UI theme preference (local copy for radio buttons)
     theme_preference: eframe::egui::ThemePreference,
-    // Cached filtered items (None when dirty)
-    filtered_items: Option<Vec<WavFileData>>,
     // Row index to scroll to (None if no scroll requested)
     scroll_to_row: Option<usize>,
     // Whether we have already attempted auto‑selection at startup
-    has_auto_selected: bool,
+    //has_auto_selected: bool,
     // Whether we should scroll to the configured file after a filter change
-    scroll_on_filter_change: bool,
+    //scroll_on_filter_change: bool,
     // Whether the user has ever manually selected a file (clicked a row)
     user_has_manually_selected: bool,
 
@@ -106,6 +109,7 @@ impl<'a> AppGUI<'a> {
             settings,
             file_manager,
             config_manager,
+            all_wav_index: WavFileIndex::new(),
             selected_checksum: None,
             sample_rate_filter,
             config_installed,
@@ -118,10 +122,8 @@ impl<'a> AppGUI<'a> {
             directory_text,
             device_name_text,
             theme_preference,
-            filtered_items: None,
+            filtered_wav_index: None,
             scroll_to_row: None,
-            has_auto_selected: false,
-            scroll_on_filter_change: false,
             user_has_manually_selected: false,
         };
 
@@ -146,7 +148,7 @@ impl<'a> AppGUI<'a> {
 
     fn on_write_config_click(&mut self) {
         if let Some(checksum) = self.selected_checksum {
-            let selected_wav = match self.find_wave_by_checksum(checksum) {
+            let selected_wav = match self.find_wav_by_checksum(checksum) {
                 Some(wave) => wave,
                 None => {
                     self.message(MessageLevel::Error, "Selected file not found");
@@ -233,18 +235,15 @@ impl<'a> AppGUI<'a> {
         self.modal_message = message.to_string();
     }
 
-    /// Find wave data by checksum.
-    fn find_wave_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
-        self.file_manager
-            .wave_data
-            .iter()
-            .find(|w| w.checksum == checksum)
+    /// Find wav data by checksum.
+    fn find_wav_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
+        self.all_wav_index.get_by_checksum(checksum)
     }
 
     /// Get HRTF metadata for the currently selected file, if any.
     fn selected_metadata(&self) -> Option<&crate::descriptions::HRTFMetadata> {
         let checksum = self.selected_checksum?;
-        let wave = self.find_wave_by_checksum(checksum)?;
+        let wave = self.find_wav_by_checksum(checksum)?;
         wave.metadata.as_deref()
     }
 
@@ -258,20 +257,42 @@ impl<'a> AppGUI<'a> {
         format!("{}...", truncated.trim_end())
     }
 
+    /// Gives access to filtered items index, recreating it if it is None.
+    fn get_filtered_items(&mut self) -> &WavFileIndex {
+        if self.filtered_wav_index.is_some() {
+            return &self.filtered_wav_index.as_ref().unwrap();
+        }
+        let filter_predicate = |wave: &&WavFileData| {
+                    let sample_rate_ok = match self.sample_rate_filter {
+                        WaveSampleRate::Unknown => true,
+                        WaveSampleRate::Damaged => false,
+                        _ => wave.sample_rate == self.sample_rate_filter,
+                    };
+                    let search_ok = if self.search_text.is_empty() {
+                        true
+                    } else {
+                        let search_lower = self.search_text.to_lowercase();
+                        let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
+                        path_lower.contains(&search_lower)
+                    };
+                    sample_rate_ok && search_ok
+                };
+        self.filtered_wav_index = Some(self.all_wav_index.filtered_clone(filter_predicate));
+        return &self.filtered_wav_index.as_ref().unwrap(); 
+    }
+
     /// Renders the file table with two columns: "Files" and "Description".
-    fn render_file_table(&mut self, ui: &mut egui::Ui, filtered_items: Vec<WavFileData>) {
+    fn render_file_table(&mut self, ui: &mut egui::Ui) {
         // Wrap the table in its own frame
         let table_frame = egui::Frame::group(ui.style());
         table_frame.show(ui, |ui| {
             // Create a two-column table using rows() for better performance
             let row_height = 20.0;
-            let num_rows = filtered_items.len();
+            let num_rows = self.get_filtered_items().len();
             let available_width = ui.available_width();
             let available_height: f32 = ui.available_height() - Self::METADATA_FRAME_HEIGHT;
 
-            // Take the scroll request (if any) so we don't scroll again next frame
-            let scroll_row = self.scroll_to_row.take();
-
+            
             let mut table_builder = TableBuilder::new(ui)
                 .column(Column::initial(available_width * 0.6)) // "Files" column - auto width
                 .column(Column::remainder().clip(true)) // "Description" column - takes remaining width
@@ -282,6 +303,8 @@ impl<'a> AppGUI<'a> {
                 .sense(egui::Sense::click()) // Make rows clickable
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center)); // Center content vertically
 
+            // Take the scroll request (if any) so we don't scroll again next frame
+            let scroll_row = self.scroll_to_row.take();    
             // Apply scroll if requested
             if let Some(row) = scroll_row {
                 table_builder = table_builder.scroll_to_row(row, None);
@@ -299,13 +322,14 @@ impl<'a> AppGUI<'a> {
                 .body(|body| {
                     // Table rows are generated here
                     body.rows(row_height, num_rows, |mut row| {
-                        let wave = &filtered_items[row.index()];
-                        let rel_path = &wave.relative_path;
-                        let is_selected = self.selected_checksum == Some(wave.checksum);
-                        let mut label_text = rel_path.to_string_lossy().to_string();
+                        let selected_checksum: Option<u64> = self.selected_checksum;
+                        let wave: &WavFileData = self.get_filtered_items().get_by_index(row.index()).expect("Index out of bounds in table.rows()");
+                        let rel_path: &PathBuf = &wave.relative_path;
+                        let is_selected: bool = selected_checksum == Some(wave.checksum);
+                        let mut label_text: String = rel_path.to_string_lossy().to_string();
 
                         // Get HRTF metadata for this file (cheap lookup)
-                        let description_text = wave
+                        let description_text: String = wave
                             .metadata
                             .as_ref()
                             .map(|rc| {
@@ -391,26 +415,8 @@ impl<'a> AppGUI<'a> {
 
             // Check if filter changed
             if old_filter != self.sample_rate_filter {
-                // If a file is selected, check if it's still visible with the new filter
-                if let Some(checksum) = self.selected_checksum {
-                    if let Some(wave) = self.find_wave_by_checksum(checksum) {
-                        let matches = match self.sample_rate_filter {
-                            WaveSampleRate::Unknown => true,
-                            WaveSampleRate::Damaged => false,
-                            _ => wave.sample_rate == self.sample_rate_filter,
-                        };
-                        if !matches {
-                            self.selected_checksum = None;
-                        }
-                    } else {
-                        // Selected wave not found (should not happen)
-                        self.selected_checksum = None;
-                    }
-                }
                 // Invalidate cached filtered items
-                self.filtered_items = None;
-                // Request scroll to configured file if it becomes visible
-                self.scroll_on_filter_change = true;
+                self.filtered_wav_index = None;
             }
         });
 
@@ -422,85 +428,31 @@ impl<'a> AppGUI<'a> {
             );
             if ui.button("Clear").clicked() {
                 self.search_text.clear();
-                self.filtered_items = None;
             }
-            // If search text changed, invalidate cache
+            // If search text changed, invalidate cached filtered items
             if old_search != self.search_text {
-                self.filtered_items = None;
-                self.scroll_on_filter_change = true;
+                self.filtered_wav_index = None;
             }
         });
+        
 
-        // Compute filtered items if cache is empty
-        if self.filtered_items.is_none() {
-            let filtered: Vec<WavFileData> = self
-                .file_manager
-                .wave_data
-                .iter()
-                .filter(|wave| {
-                    let sample_rate_ok = match self.sample_rate_filter {
-                        WaveSampleRate::Unknown => true,
-                        WaveSampleRate::Damaged => false,
-                        _ => wave.sample_rate == self.sample_rate_filter,
-                    };
-                    let search_ok = if self.search_text.is_empty() {
-                        true
-                    } else {
-                        let search_lower = self.search_text.to_lowercase();
-                        let path_lower = wave.relative_path.to_string_lossy().to_lowercase();
-                        path_lower.contains(&search_lower)
-                    };
-                    sample_rate_ok && search_ok
-                })
-                .cloned()
-                .collect();
-            self.filtered_items = Some(filtered);
-        }
-
-        let filtered_items = self.filtered_items.as_ref().unwrap();
-
-        // Auto‑select configured file on first render (if applicable)
-        if !self.has_auto_selected {
-            // Valid configured file?
-            if let Some(config_checksum) = self.config_installed
-                && config_checksum != 0
-                && self.selected_checksum.is_none()
-            {
-                if let Some(index) = filtered_items.iter().position(|w| w.checksum == config_checksum) {
-                    self.selected_checksum = Some(config_checksum);
-                    self.scroll_to_row = Some(index);
-                }
-            }
-            self.has_auto_selected = true;
-        }
 
         // If selected file is no longer visible, deselect it
-        if let Some(checksum) = self.selected_checksum
-            && !filtered_items.iter().any(|w| w.checksum == checksum)
-        {
-            self.selected_checksum = None;
-        }
-
-        // Scroll to configured file after a filter change (if it's visible)
-        if self.scroll_on_filter_change {
-            self.scroll_on_filter_change = false;
-            if let Some(config_checksum) = self.config_installed
-                && config_checksum != 0
-            {
-                if let Some(index) = filtered_items.iter().position(|w| w.checksum == config_checksum) {
-                    // Select the configured file if nothing is selected AND user hasn't manually selected before
-                    if self.selected_checksum.is_none() && !self.user_has_manually_selected {
-                        self.selected_checksum = Some(config_checksum);
-                    }
-                    self.scroll_to_row = Some(index);
+        if self.selected_checksum.is_some(){
+            let selected_checksum = self.selected_checksum.unwrap();
+            if self.get_filtered_items().get_by_checksum(selected_checksum).is_none()
+                {
+                self.selected_checksum = None;
                 }
             }
-        }
 
-        if filtered_items.is_empty() {
+
+
+
+        if self.get_filtered_items().len() == 0 {
             ui.label("No .wav files matching this filter were found in the directory.");
         } else {
-            self.render_file_table(ui, filtered_items.clone());
+            self.render_file_table(ui);
             // HRTF metadata frame (detailed view for selected file)
             let frame = egui::Frame::group(ui.style());
             frame.show(ui, |ui| {
@@ -656,7 +608,7 @@ impl<'a> AppGUI<'a> {
         }
 
         // Invalidate filtered items cache
-        self.filtered_items = None;
+        self.filtered_wav_index = None;
 
         // Perform safe rescan with the new directory (safe_rescan will handle persistence)
         // We need to set the directory in settings, but safe_rescan will temporarily set to None.
@@ -664,12 +616,12 @@ impl<'a> AppGUI<'a> {
         self.settings.borrow_mut().set_wav_directory(Some(path));
 
         match self.safe_rescan() {
-            Ok(file_count) => {
+            Ok(_) => {
                 self.message(
                     MessageLevel::Normal,
                     &format!(
                         "Scanned IR directory: {} ({} files found)",
-                        dir_text, file_count
+                        dir_text, self.all_wav_index.len()
                     ),
                 );
             }
@@ -685,17 +637,20 @@ impl<'a> AppGUI<'a> {
     /// Performs a safe rescan. The purpose is to make sure that if
     /// application crashes during rescan, then the faulty directory
     /// is not saved into settings and will not be scanned on restart.
-    /// Returns the number of files scanned on success, or an error.
-    fn safe_rescan(&mut self) -> anyhow::Result<usize> {
+    fn safe_rescan(&mut self) -> anyhow::Result<()> {
+        // Clean filtered_items, just to be sure
+        self.filtered_wav_index = None;
         // If get_wav_directory is None, skip scanning
         let original_path = self.settings.borrow().get_wav_directory();
         if original_path.is_none() {
-            return Ok(self.file_manager.wave_data.len());
+            self.all_wav_index.clear();
+            return Ok(());
         }
+
 
         // If settings.active_wav_directory is used, simply scan
         if !self.settings.borrow().is_wav_directory_set() {
-            self.file_manager.rescan_configured_directory()?;
+            self.all_wav_index = self.file_manager.rescan_configured_directory()?;
         } else {
             // Temporarily set wav_directory to None and persist
             self.settings.borrow_mut().set_wav_directory(None);
@@ -705,7 +660,7 @@ impl<'a> AppGUI<'a> {
             self.settings.borrow_mut().set_wav_directory(original_path);
 
             // Perform the actual scan
-            self.file_manager.rescan_configured_directory()?;
+            self.all_wav_index = self.file_manager.rescan_configured_directory()?;
 
             // Persist the directory after successful scan
             self.write_settings();
@@ -714,13 +669,11 @@ impl<'a> AppGUI<'a> {
         // Update UI state
         // Keep selected_checksum, but verify it still exists after rescan
         if let Some(checksum) = self.selected_checksum
-            && self.find_wave_by_checksum(checksum).is_none()
+            && self.find_wav_by_checksum(checksum).is_none()
         {
             self.selected_checksum = None;
         }
-        let file_count = self.file_manager.wave_data.len();
-
-        Ok(file_count)
+        Ok(())
     }
 
     /// Handles the "Apply" button click for virtual device name.
@@ -789,8 +742,6 @@ impl<'a> eframe::App for AppGUI<'a> {
                     egui::Button::new(
                         egui::RichText::new("💾 Create device").heading()
                     )
-                    //.fill(egui::Color32::from_rgb(0, 123, 255))
-                    //.min_size(egui::vec2(200.0, 40.0))
                 );
                 if write_button.clicked() {
                     self.on_write_config_click();
@@ -817,7 +768,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                         .color(egui::Color32::RED));
                 }
                 Some(checksum) => {
-                    if let Some(wave) = self.find_wave_by_checksum(checksum) {
+                    if let Some(wave) = self.find_wav_by_checksum(checksum) {
                         ui.label(format!("Current IR file: {}", wave.relative_path.display()));
                     } else {
                         ui.label(egui::RichText::new("Warning: The configured IR file is not found in the current IR directory.")
