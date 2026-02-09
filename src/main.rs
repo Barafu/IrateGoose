@@ -3,6 +3,7 @@ mod config_manager;
 mod descriptions;
 mod file_manager;
 mod goose;
+mod logging;
 mod settings;
 mod wav_file_index;
 
@@ -42,8 +43,15 @@ struct CliArgs {
 }
 
 fn main() {
-    // Initialise logger
-    env_logger::init();
+    // Create shared log buffer
+    let log_buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let buffer_for_logging = std::sync::Arc::clone(&log_buffer);
+
+    // Initialize log4rs with console and memory appenders
+    if let Err(e) = logging::init_logging(buffer_for_logging) {
+        eprintln!("Failed to initialize logging: {}", e);
+        std::process::exit(1);
+    }
 
     // Parse CLI arguments
     let args = CliArgs::parse();
@@ -116,6 +124,7 @@ fn main() {
                 settings.clone(),
                 &mut file_manager,
                 &config_manager,
+                log_buffer,
             )))
         }),
     );

@@ -9,7 +9,6 @@ description = "A GUI to configure virtual surround sound capabilities of Pipewir
 
 [dependencies]
 eframe = { version = "0.33.3", features = ["serde"] }
-env_logger = "0.11.8"
 dirs = "6.0.0"
 anyhow = "1.0.100"
 log = "0.4.29"
@@ -25,6 +24,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 egui = { version = "0.33.3", features = ["serde"] }
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }
 rfd = { version = "0.17.2", features = ["xdg-portal"] }
+log4rs = "1.4.0"
 
 [profile.release]
 strip = true #Remove extra symbols

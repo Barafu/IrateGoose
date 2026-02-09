@@ -9,7 +9,8 @@ use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use crate::wav_file_index::WavFileIndex;
-use log::{error, info};
+use log::{error, info, warn};
+use std::sync::{Arc, Mutex};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -35,6 +36,8 @@ pub struct AppGUI<'a> {
     all_wav_index: WavFileIndex,
     // Cached filtered items (None when dirty)
     filtered_wav_index: Option<WavFileIndex>,
+    // Shared log buffer
+    log_buffer: Arc<Mutex<Vec<String>>>,
 
     // === UI state ===
     // Checksum of selected file (None if none selected)
@@ -44,8 +47,6 @@ pub struct AppGUI<'a> {
     // Checksum of the WAV file set in installed Pipewire config file if any
     // None = no config, Some(0) = config exists but file is damaged, Some(nonzero) = valid checksum
     config_installed: Option<u64>,
-    // Status bar message
-    status_message: String,
     // Search filter text
     search_text: String,
     // Currently selected tab (Files/Options)
@@ -68,11 +69,6 @@ pub struct AppGUI<'a> {
     modal_message: String,
 }
 
-enum MessageLevel {
-    Normal,
-    Error,
-}
-
 impl<'a> AppGUI<'a> {
     const METADATA_FRAME_HEIGHT: f32 = 120.0;
 
@@ -81,6 +77,7 @@ impl<'a> AppGUI<'a> {
         settings: Rc<RefCell<AppSettings>>,
         file_manager: &'a mut FileManager,
         config_manager: &'a ConfigManager,
+        log_buffer: Arc<Mutex<Vec<String>>>,
     ) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
 
@@ -106,10 +103,10 @@ impl<'a> AppGUI<'a> {
             file_manager,
             config_manager,
             all_wav_index: WavFileIndex::new(),
+            log_buffer,
             selected_checksum: None,
             sample_rate_filter,
             config_installed,
-            status_message: String::new(),
             search_text: String::new(),
             selected_tab: Tab::Files,
             modal_open: false,
@@ -146,7 +143,7 @@ impl<'a> AppGUI<'a> {
             let selected_wav = match self.find_wav_by_checksum(checksum) {
                 Some(wave) => wave,
                 None => {
-                    self.message(MessageLevel::Error, "Selected file not found");
+                    error!("Selected file not found");
                     return;
                 }
             };
@@ -157,70 +154,42 @@ impl<'a> AppGUI<'a> {
                     // Double-check that config was written correctly and extract the checksum from config
                     match self.config_manager.config_exists() {
                         Ok(Some(checksum)) => {
-                            self.message(
-                                MessageLevel::Normal,
-                                &format!("Config written using {}", display_path),
-                            );
+                            info!("Config written using {}", display_path);
                             self.config_installed = Some(checksum);
                         }
                         Ok(None) => {
                             // Config file doesn't exist after writing - something went wrong
-                            self.message(
-                                MessageLevel::Error,
-                                "Config written but not found afterwards",
-                            );
+                            error!("Config written but not found afterwards");
                             self.config_installed = None;
                         }
                         Err(e) => {
                             // Error reading config after write
-                            self.message(
-                                MessageLevel::Error,
-                                &format!("Config written but error verifying: {}", e),
-                            );
+                            error!("Config written but error verifying: {}", e);
                             self.config_installed = None;
                         }
                     }
                 }
                 Err(e) => {
-                    self.message(
-                        MessageLevel::Error,
-                        &format!("Failed to write config: {}", e),
-                    );
+                    error!("Failed to write config: {}", e);
                 }
             }
         } else {
-            self.message(MessageLevel::Error, "No file selected");
+            warn!("No file selected");
         }
     }
 
     fn on_delete_config_click(&mut self) {
         match self.config_manager.delete_config() {
             Ok(()) => {
-                self.message(MessageLevel::Normal, "Config deleted");
+                info!("Config deleted");
                 self.config_installed = None;
             }
             Err(e) => {
-                self.message(
-                    MessageLevel::Error,
-                    &format!("Failed to delete config: {}", e),
-                );
+                error!("Failed to delete config: {}", e);
             }
         }
     }
 
-    /// Displays message to status bar and log.
-    fn message(&mut self, message_level: MessageLevel, message: &str) {
-        match message_level {
-            MessageLevel::Normal => {
-                info!("{}", message);
-                self.status_message = message.to_string();
-            }
-            MessageLevel::Error => {
-                error!("{}", message);
-                self.status_message = format!("ERROR! {}", message);
-            }
-        }
-    }
 
     /// Shows a modal dialog with a header, message body, and a "Continue" button.
     /// The modal will be displayed until the user clicks "Continue" or closes it.
@@ -595,16 +564,29 @@ impl<'a> AppGUI<'a> {
 
     /// Renders the log tab content.
     fn render_log(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical()
+        // Update cached log text from buffer
+        let logs = match self.log_buffer.lock() {
+            Ok(guard) => guard.clone(),
+            Err(_) => Vec::new(),
+        };
+
+        let row_height = ui.text_style_height(&egui::TextStyle::Body);
+        let num_rows = logs.len();
+        let available_height = ui.available_height();
+
+        TableBuilder::new(ui)
+            .column(Column::remainder())
+            .max_scroll_height(available_height)
+            .auto_shrink([false, false])
             .stick_to_bottom(true)
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                ui.add_sized(
-                    ui.available_size(),
-                    egui::TextEdit::multiline(&mut "Log messages will appear here.\n\nThis is a placeholder for future log output.")
-                        .desired_width(f32::INFINITY)
-                        .interactive(false)
-                );
+            .striped(true)
+            .body(|body| {
+                body.rows(row_height, num_rows, |mut row| {
+                    let logline = &logs[row.index()];
+                    row.col(|ui| {
+                        ui.label(logline);
+                    });
+                });
             });
     }
 
@@ -660,13 +642,10 @@ impl<'a> AppGUI<'a> {
 
         match self.safe_rescan() {
             Ok(_) => {
-                self.message(
-                    MessageLevel::Normal,
-                    &format!(
-                        "Scanned IR directory: {} ({} files found)",
-                        dir_text,
-                        self.all_wav_index.len()
-                    ),
+                info!(
+                    "Scanned IR directory: {} ({} files found)",
+                    dir_text,
+                    self.all_wav_index.len()
                 );
             }
             Err(e) => {
@@ -735,10 +714,7 @@ impl<'a> AppGUI<'a> {
         self.write_settings();
 
         // Show success message
-        self.message(
-            MessageLevel::Normal,
-            &format!("Device name updated to '{}'", trimmed_text),
-        );
+        info!("Device name updated to '{}'", trimmed_text);
     }
 
     /// Handles the "Default" button click for virtual device name.
@@ -769,7 +745,11 @@ impl<'a> eframe::App for AppGUI<'a> {
                             .strong(),
                     );
                 }
-                ui.label(&self.status_message);
+                // Get the last line from the log buffer
+                let last_log = self.log_buffer.lock().ok()
+                    .and_then(|guard| guard.last().cloned())
+                    .unwrap_or_default();
+                ui.label(last_log);
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
