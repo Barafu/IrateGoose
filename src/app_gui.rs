@@ -9,6 +9,7 @@ use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
 use crate::wav_file_index::WavFileIndex;
+use egui_commonmark::{CommonMarkCache, commonmark_str};
 use log::{error, info, warn};
 use std::sync::{Arc, Mutex};
 
@@ -59,6 +60,9 @@ pub struct AppGUI<'a> {
     theme_preference: eframe::egui::ThemePreference,
     // Row index to scroll to (None if no scroll requested)
     scroll_to_row: Option<usize>,
+
+    // Cache for rendering markdown help content
+    help_cache: CommonMarkCache,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -117,6 +121,7 @@ impl<'a> AppGUI<'a> {
             theme_preference,
             filtered_wav_index: None,
             scroll_to_row: None,
+            help_cache: CommonMarkCache::default(),
         };
 
         if let Err(e) = result.safe_rescan() {
@@ -602,10 +607,8 @@ impl<'a> AppGUI<'a> {
                 
                 ui.separator();
                 
-                // Placeholder for future help content
-                ui.heading("Help");
-                ui.label("Help content will be added here in a future version.");
-                ui.label("This tab will contain usage instructions and troubleshooting information.");
+                // Render the help markdown file
+                commonmark_str!(ui, &mut self.help_cache, "docs/goose_help.md");
             });
     }
 

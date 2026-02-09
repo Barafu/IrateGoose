@@ -25,6 +25,7 @@ egui = { version = "0.33.3", features = ["serde"] }
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }
 rfd = { version = "0.17.2", features = ["xdg-portal"] }
 log4rs = "1.4.0"
+egui_commonmark = { version = "0.22.0", features = ["macros"] }
 
 [profile.release]
 strip = true #Remove extra symbols

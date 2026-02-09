@@ -1240,6 +1240,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_commonmark"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5246a4e9b83c345ec8230933bd0dca16d1c3c11db0edd4fd9c1a90683240b49"
+dependencies = [
+ "egui",
+ "egui_commonmark_backend",
+ "egui_commonmark_macros",
+ "egui_extras",
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "egui_commonmark_backend"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3cff846279556f57af8ea606f2e4ceaf83e60b81db014c126dfb926fa06c75b"
+dependencies = [
+ "egui",
+ "egui_extras",
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "egui_commonmark_macros"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0208ad85747c203c8abe78d112d4d94a83bf965e01641ab0a45499f72a8b2ac2"
+dependencies = [
+ "egui",
+ "egui_commonmark_backend",
+ "proc-macro-crate",
+ "proc-macro2",
+ "pulldown-cmark",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "egui_extras"
 version = "0.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1248,6 +1287,7 @@ dependencies = [
  "ahash",
  "egui",
  "enum-map",
+ "image",
  "log",
  "mime_guess2",
  "profiling",
@@ -2048,6 +2088,7 @@ dependencies = [
  "dirs",
  "eframe",
  "egui",
+ "egui_commonmark",
  "egui_extras",
  "image",
  "log",
@@ -3128,6 +3169,17 @@ checksum = "52717f9a02b6965224f95ca2a81e2e0c5c43baacd28ca057577988930b6c3d5b"
 dependencies = [
  "quote",
  "syn",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+dependencies = [
+ "bitflags 2.10.0",
+ "memchr",
+ "unicase",
 ]
 
 [[package]]
