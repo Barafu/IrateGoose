@@ -19,6 +19,8 @@ const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 enum Tab {
     Files,
     Options,
+    Log,
+    Help,
 }
 
 pub struct AppGUI<'a> {
@@ -582,11 +584,6 @@ impl<'a> AppGUI<'a> {
             ui.ctx().set_theme(self.theme_preference);
         }
 
-        ui.separator();
-        ui.heading("About");
-        ui.label(format!("IrateGoose v{}", VERSION));
-        ui.hyperlink_to("Home page", REPOSITORY);
-
         if self.settings.borrow().dev_mode {
             // Developer-only buttons
             ui.separator();
@@ -594,6 +591,40 @@ impl<'a> AppGUI<'a> {
                 self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
             }
         }
+    }
+
+    /// Renders the log tab content.
+    fn render_log(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical()
+            .stick_to_bottom(true)
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                ui.add_sized(
+                    ui.available_size(),
+                    egui::TextEdit::multiline(&mut "Log messages will appear here.\n\nThis is a placeholder for future log output.")
+                        .desired_width(f32::INFINITY)
+                        .interactive(false)
+                );
+            });
+    }
+
+    /// Renders the help tab content.
+    fn render_help(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                // About section
+                ui.heading("About");
+                ui.label(format!("IrateGoose v{}", VERSION));
+                ui.hyperlink_to("Home page", REPOSITORY);
+                
+                ui.separator();
+                
+                // Placeholder for future help content
+                ui.heading("Help");
+                ui.label("Help content will be added here in a future version.");
+                ui.label("This tab will contain usage instructions and troubleshooting information.");
+            });
     }
 
     /// Handles the "Rescan" button click for WAV directory.
@@ -797,18 +828,55 @@ impl<'a> eframe::App for AppGUI<'a> {
 
             ui.separator();
 
-            // Tab selection
+            // Tab selection - all buttons have the same width
             ui.horizontal(|ui| {
-                ui.selectable_value(
-                    &mut self.selected_tab,
-                    Tab::Files,
-                    egui::RichText::new("Files").heading(),
-                );
-                ui.selectable_value(
-                    &mut self.selected_tab,
-                    Tab::Options,
-                    egui::RichText::new("Options").heading(),
-                );
+                // Use a minimum width that ensures all buttons are the same size
+                // The actual width will be determined by the button's content
+                let min_button_width = 80.0; // Minimum width, buttons will expand if needed
+                
+                // Files tab
+                if ui.add(
+                    egui::Button::selectable(
+                        self.selected_tab == Tab::Files,
+                        egui::RichText::new("♪ Files").heading(),
+                    )
+                    .min_size(egui::vec2(min_button_width, ui.spacing().interact_size.y))
+                ).clicked() {
+                    self.selected_tab = Tab::Files;
+                }
+                
+                // Options tab
+                if ui.add(
+                    egui::Button::selectable(
+                        self.selected_tab == Tab::Options,
+                        egui::RichText::new("⚙ Options").heading(),
+                    )
+                    .min_size(egui::vec2(min_button_width, ui.spacing().interact_size.y))
+                ).clicked() {
+                    self.selected_tab = Tab::Options;
+                }
+                
+                // Log tab
+                if ui.add(
+                    egui::Button::selectable(
+                        self.selected_tab == Tab::Log,
+                        egui::RichText::new("🖹 Log").heading(),
+                    )
+                    .min_size(egui::vec2(min_button_width, ui.spacing().interact_size.y))
+                ).clicked() {
+                    self.selected_tab = Tab::Log;
+                }
+                
+                // Help tab
+                if ui.add(
+                    egui::Button::selectable(
+                        self.selected_tab == Tab::Help,
+                        egui::RichText::new("❓ Help").heading(),
+                    )
+                    .min_size(egui::vec2(min_button_width, ui.spacing().interact_size.y))
+                ).clicked() {
+                    self.selected_tab = Tab::Help;
+                }
             });
 
             ui.separator();
@@ -820,6 +888,12 @@ impl<'a> eframe::App for AppGUI<'a> {
                 }
                 Tab::Options => {
                     self.render_options(ui);
+                }
+                Tab::Log => {
+                    self.render_log(ui);
+                }
+                Tab::Help => {
+                    self.render_help(ui);
                 }
             }
 
