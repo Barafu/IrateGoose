@@ -69,6 +69,8 @@ For permanent installation:
    ```
    Note: The binary and WAV files need to be removed manually if desired.
 
+### Application icon:
+
 <img width="512" height="512" alt="irate_goose_logo" src="https://github.com/user-attachments/assets/d3019976-6a3d-46cd-a726-30da7dc8a80a" style="width:30%; height:auto;"/>
 
 
