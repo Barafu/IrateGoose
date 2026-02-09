@@ -18,6 +18,7 @@ use crate::descriptions::Descriptions;
 use crate::settings::AppSettings;
 use app_gui::AppGUI;
 use config_manager::ConfigManager;
+use eframe::{egui::ViewportBuilder, icon_data::from_png_bytes};
 use file_manager::FileManager;
 
 /// Command line arguments
@@ -114,9 +115,27 @@ fn main() {
         }
     };
 
+    // Load icon from embedded PNG bytes (same as used in goose.rs)
+    let icon_bytes = crate::goose::ICON_BYTES;
+    let icon = match from_png_bytes(icon_bytes) {
+        Ok(icon) => icon,
+        Err(e) => {
+            log::warn!("Failed to load window icon: {}, using default", e);
+            eframe::egui::IconData::default()
+        }
+    };
+
+    let native_options = eframe::NativeOptions {
+        viewport: ViewportBuilder::default()
+            .with_app_id("barafu-irategoose")
+            .with_title("IrateGoose - Surround Sound Configurator")
+            .with_icon(icon),
+        ..eframe::NativeOptions::default()
+    };
+
     let _ = eframe::run_native(
         "IrateGoose - Surround Sound Configurator",
-        eframe::NativeOptions::default(),
+        native_options,
         Box::new(|cc| {
             // Theme will be set by AppGUI constructor
             Ok(Box::new(AppGUI::new(

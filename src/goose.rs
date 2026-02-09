@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// Icon bytes embedded at compile time
-const ICON_BYTES: &[u8] = include_bytes!("../data/IrateGoose256.png");
+pub const ICON_BYTES: &[u8] = include_bytes!("../data/IrateGoose256.png");
 /// Desktop file template embedded at compile time
 const DESKTOP_TEMPLATE: &str = include_str!("../data/barafu-irategoose.desktop.template");
 
