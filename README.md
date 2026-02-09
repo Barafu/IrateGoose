@@ -4,6 +4,8 @@
 
 IrateGoose is a graphical application that configures PipeWire to create a virtual sound card providing spatial audio directionality in headphones. It transforms standard 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, giving you immersive 3D audio perception through regular stereo headphones.
 
+<img width="1028" height="797" alt="irate_goose_mainwindow" src="https://github.com/user-attachments/assets/f2029404-be7a-469b-baea-fa3a9a1a2519" />
+
 ## How It Works
 
 IrateGoose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
@@ -67,7 +69,10 @@ For permanent installation:
    ```
    Note: The binary and WAV files need to be removed manually if desired.
 
-### Step 4: Command Line Options
+<img width="512" height="512" alt="irate_goose_logo" src="https://github.com/user-attachments/assets/d3019976-6a3d-46cd-a726-30da7dc8a80a" />
+
+
+### Command Line Options
 IrateGoose supports several command-line options:
 
 - **Set WAV folder temporarily**: Specify the WAV folder path as an argument:
@@ -89,7 +94,7 @@ IrateGoose supports several command-line options:
 
 ## Configuration
 
-### Step 2: Select an IR File
+### Select an IR File
 Launch IrateGoose. The application will display a list of detected WAV files with their descriptions:
 1. Browse through the available IR files
 2. Use the search box to find specific files
@@ -101,13 +106,13 @@ The application can recognize some well-known IR files (by file name only) and s
 - **Description** of the measurement subject or method
 - **Source** and **credits** for the data
 
-### Step 3: Configure Options (Optional)
+### Configure Options (Optional)
 Before applying configuration, you can customize settings on the **Options tab**:
 - **Virtual Device Name**: Choose a custom name for your virtual sound card
 - **WAV Folder**: Set the directory containing your WAV files
 
 ### Step 4: Apply Configuration
-Click the **"Write config"** button to apply your selection. IrateGoose will:
+Click the **"Create Device"** button to apply your selection. IrateGoose will:
 1. Create a PipeWire configuration file at `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf`
 2. Restart PipeWire services to apply the changes
 3. Create a virtual sound card with your chosen name (default: "Virtual Surround Sink")
@@ -181,7 +186,7 @@ Expect to spend some time trying different IR files until you find one that suit
 
 To remove the virtual surround sink and return to normal audio:
 1. Launch IrateGoose
-2. Click the **"Delete config"** button
+2. Click the **"Remove device"** button
 3. The virtual sound card will be removed after PipeWire services restart
 4. Select your original audio device in system settings
 
