@@ -1,5 +1,3 @@
-# UNDER CONSTRUCTION. WATCH OUT FOR FALLING GEESE. 
-
 # IrateGoose - Virtual Surround Sound for PipeWire
 
 IrateGoose is a graphical application that configures PipeWire to create a virtual sound card providing spatial audio directionality in headphones. It transforms standard 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, giving you immersive 3D audio perception through regular stereo headphones.
