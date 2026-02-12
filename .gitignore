@@ -27,5 +27,4 @@ target
 
 /target
 
-data/HRTF_Descriptions.csv.zst
 irate_goose_dev_settings.toml
