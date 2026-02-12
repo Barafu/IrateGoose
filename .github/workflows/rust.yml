@@ -12,6 +12,8 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@master
+      - name: Update rust toolchain version
+        run: rustup update
       - name: Compile and release
         uses: rust-build/rust-build.action@v1.4.5
         env:
