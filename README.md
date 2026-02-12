@@ -111,7 +111,7 @@ Before applying configuration, you can customize settings on the **Options tab**
 - **Virtual Device Name**: Choose a custom name for your virtual sound card
 - **WAV Folder**: Set the directory containing your WAV files
 
-### Step 4: Apply Configuration
+### Apply Configuration
 Click the **"Create Device"** button to apply your selection. IrateGoose will:
 1. Create a PipeWire configuration file at `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf`
 2. Restart PipeWire services to apply the changes
@@ -119,14 +119,14 @@ Click the **"Create Device"** button to apply your selection. IrateGoose will:
 
 **Important**: You can now close IrateGoose - it doesn't need to keep running! The configuration persists until you change or delete it.
 
-### Step 4: Select the Virtual Sound Card
+### Select the Virtual Sound Card
 1. Open your desktop environment's sound settings (KDE System Settings, pavucontrol,  etc.)
 2. Look for "Virtual Surround Sink" in the output devices list
 3. Select it as your playback device
 
 **Note for KDE Plasma users**: Some desktop environments, like KDE Plasma, may not show virtual sound cards by default. You may need to enable "Show virtual devices" in the sound settings.
 
-### Step 5: Configure Your Audio Sources
+### Configure Your Audio Sources
 For spatial audio to work correctly, your applications must output **7.1 channel audio**, not stereo or headphone audio:
 
 #### Games:
