@@ -20,7 +20,11 @@ impl MemoryAppender {
 impl Append for MemoryAppender {
     fn append(&self, record: &log::Record) -> Result<()> {
         // Only store logs from our own crate
-        if record.module_path().map(|p| p.starts_with("irate_goose")).unwrap_or(false) {
+        if record
+            .module_path()
+            .map(|p| p.starts_with("irate_goose"))
+            .unwrap_or(false)
+        {
             let formatted = format!("{}", record.args());
             if let Ok(mut guard) = self.buffer.lock() {
                 guard.push(formatted);

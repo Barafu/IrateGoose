@@ -15,7 +15,7 @@ use xxhash_rust::xxh3::xxh3_64;
 
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
-    /// Temporary storage for scan time. 
+    /// Temporary storage for scan time.
     scanning_wave_data: Vec<WavFileData>,
     /// Wavefile dir that was scanned last time.
     current_wavefile_dir: Option<PathBuf>,
@@ -74,7 +74,11 @@ impl FileManager {
             checksum: u64,
         }
         // Copy all file paths, keeping the order
-        let paths: Vec<PathBuf> = self.scanning_wave_data.iter().map(|w| w.path.clone()).collect();
+        let paths: Vec<PathBuf> = self
+            .scanning_wave_data
+            .iter()
+            .map(|w| w.path.clone())
+            .collect();
         // Multithreaded scan of files to collect metadata
         let metarecords: Vec<FileMetadataRecord> = paths
             .par_iter()

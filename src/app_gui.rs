@@ -195,7 +195,6 @@ impl<'a> AppGUI<'a> {
         }
     }
 
-
     /// Shows a modal dialog with a header, message body, and a "Continue" button.
     /// The modal will be displayed until the user clicks "Continue" or closes it.
     fn show_modal(&mut self, header: &str, message: &str) {
@@ -243,12 +242,12 @@ impl<'a> AppGUI<'a> {
         }
         // If selection changed (or newly selected) and we have a filtered index,
         // scroll to the selected row if it's present in the filtered list.
-        if self.selected_checksum != old_checksum && self.selected_checksum.is_some() {
-            if let Some(filtered) = self.filtered_wav_index.as_ref() {
-                if let Some(row) = filtered.index_of_checksum(self.selected_checksum.unwrap()) {
-                    self.scroll_to_row = Some(row);
-                }
-            }
+        if self.selected_checksum != old_checksum
+            && self.selected_checksum.is_some()
+            && let Some(filtered) = self.filtered_wav_index.as_ref()
+            && let Some(row) = filtered.index_of_checksum(self.selected_checksum.unwrap())
+        {
+            self.scroll_to_row = Some(row);
         }
     }
 
@@ -274,10 +273,14 @@ impl<'a> AppGUI<'a> {
         };
         self.filtered_wav_index = Some(self.all_wav_index.filtered_clone(filter_predicate));
         // After recreating the filtered index, scroll to the selected row if present
-        if let Some(checksum) = self.selected_checksum {
-            if let Some(row) = self.filtered_wav_index.as_ref().unwrap().index_of_checksum(checksum) {
-                self.scroll_to_row = Some(row);
-            }
+        if let Some(checksum) = self.selected_checksum
+            && let Some(row) = self
+                .filtered_wav_index
+                .as_ref()
+                .unwrap()
+                .index_of_checksum(checksum)
+        {
+            self.scroll_to_row = Some(row);
         }
         self.filtered_wav_index.as_ref().unwrap()
     }
@@ -604,9 +607,9 @@ impl<'a> AppGUI<'a> {
                 ui.heading("About");
                 ui.label(format!("IrateGoose v{}", VERSION));
                 ui.hyperlink_to("Home page", REPOSITORY);
-                
+
                 ui.separator();
-                
+
                 // Render the help markdown file
                 commonmark_str!(ui, &mut self.help_cache, "docs/goose_help.md");
             });
@@ -749,7 +752,10 @@ impl<'a> eframe::App for AppGUI<'a> {
                     );
                 }
                 // Get the last line from the log buffer
-                let last_log = self.log_buffer.lock().ok()
+                let last_log = self
+                    .log_buffer
+                    .lock()
+                    .ok()
                     .and_then(|guard| guard.last().cloned())
                     .unwrap_or_default();
                 ui.label(last_log);
@@ -816,7 +822,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                 // Use a minimum width that ensures all buttons are the same size
                 // The actual width will be determined by the button's content
                 let min_button_width = 80.0; // Minimum width, buttons will expand if needed
-                
+
                 // Files tab
                 if ui.add(
                     egui::Button::selectable(
@@ -827,7 +833,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                 ).clicked() {
                     self.selected_tab = Tab::Files;
                 }
-                
+
                 // Options tab
                 if ui.add(
                     egui::Button::selectable(
@@ -838,7 +844,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                 ).clicked() {
                     self.selected_tab = Tab::Options;
                 }
-                
+
                 // Log tab
                 if ui.add(
                     egui::Button::selectable(
@@ -849,7 +855,7 @@ impl<'a> eframe::App for AppGUI<'a> {
                 ).clicked() {
                     self.selected_tab = Tab::Log;
                 }
-                
+
                 // Help tab
                 if ui.add(
                     egui::Button::selectable(

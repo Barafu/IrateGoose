@@ -34,11 +34,14 @@ fn determine_executable() -> Result<String> {
         .with_context(|| format!("Failed to run 'type -p {}'", binary_name))?;
 
     if which_output.status.success() {
-        let path_str = String::from_utf8_lossy(&which_output.stdout).trim().to_string();
+        let path_str = String::from_utf8_lossy(&which_output.stdout)
+            .trim()
+            .to_string();
         if let Ok(which_path) = PathBuf::from(&path_str).canonicalize()
-            && which_path == current_exe {
-                return Ok(binary_name);
-            }
+            && which_path == current_exe
+        {
+            return Ok(binary_name);
+        }
     }
 
     // Fallback to absolute path
@@ -79,7 +82,10 @@ pub fn install_goose() -> Result<()> {
         .context("Failed to execute xdg-desktop-menu")?;
 
     if !status.success() {
-        return Err(anyhow!("xdg-desktop-menu failed with exit code {:?}", status.code()));
+        return Err(anyhow!(
+            "xdg-desktop-menu failed with exit code {:?}",
+            status.code()
+        ));
     }
 
     // Create temporary icon file with exact name "barafu-irategoose.png"
@@ -95,7 +101,10 @@ pub fn install_goose() -> Result<()> {
         .context("Failed to execute xdg-icon-resource")?;
 
     if !status.success() {
-        return Err(anyhow!("xdg-icon-resource failed with exit code {:?}", status.code()));
+        return Err(anyhow!(
+            "xdg-icon-resource failed with exit code {:?}",
+            status.code()
+        ));
     }
 
     log::info!("Installation completed successfully");
@@ -120,7 +129,10 @@ pub fn uninstall_goose() -> Result<()> {
         .context("Failed to execute xdg-desktop-menu uninstall")?;
 
     if !status.success() {
-        return Err(anyhow!("xdg-desktop-menu uninstall failed with exit code {:?}", status.code()));
+        return Err(anyhow!(
+            "xdg-desktop-menu uninstall failed with exit code {:?}",
+            status.code()
+        ));
     }
 
     // Uninstall icon
@@ -131,7 +143,10 @@ pub fn uninstall_goose() -> Result<()> {
         .context("Failed to execute xdg-icon-resource uninstall")?;
 
     if !status.success() {
-        return Err(anyhow!("xdg-icon-resource uninstall failed with exit code {:?}", status.code()));
+        return Err(anyhow!(
+            "xdg-icon-resource uninstall failed with exit code {:?}",
+            status.code()
+        ));
     }
 
     log::info!("Uninstallation completed successfully");

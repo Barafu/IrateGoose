@@ -104,11 +104,8 @@ impl WavFileIndex {
     where
         P: FnMut(&&WavFileData) -> bool,
     {
-        let filtered_data: Vec<WavFileData> = self.items
-            .iter()
-            .filter(predicate)
-            .cloned()
-            .collect();
+        let filtered_data: Vec<WavFileData> =
+            self.items.iter().filter(predicate).cloned().collect();
         let mut new_index = Self::from_vec(filtered_data);
         new_index.shrink_to_fit();
         new_index
