@@ -6,7 +6,7 @@ on:
 
 jobs:
   release:
-    name: release ${{ matrix.target }}
+    name: irate_goose
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -18,4 +18,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           RUSTTARGET: x86_64-unknown-linux
-          EXTRA_FILES: "README.md LICENSE"
