@@ -36,9 +36,7 @@ IrateGoose requires impulse response files in WAV format compatible with HeSuVi.
 1. **Download from collection**: Get IR files from the website:
    [https://airtable.com/appayGNkn3nSuXkaz/shruimhjdSakUPg2m/tbloLjoZKWJDnLtTc](https://airtable.com/appayGNkn3nSuXkaz/shruimhjdSakUPg2m/tbloLjoZKWJDnLtTc)
 
-2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at:
-   - Windows: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`
-   - You can copy the WAV files from there to use with IrateGoose.
+2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with IrateGoose.
 
 3. **Use your own**: Any multi-channel WAV file in HeSuVi format (14 channels for 7.1 processing) will work.
 
