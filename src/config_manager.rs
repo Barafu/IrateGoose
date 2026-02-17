@@ -1,5 +1,7 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
+use log::warn;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -209,5 +211,185 @@ impl ConfigManager {
                 None => Err(anyhow!("systemctl terminated by signal")),
             }
         }
+    }
+
+    /// Runs `pw-cli list-objects` and parses its output into a vector of property maps.
+    ///
+    /// Each object is represented as a `HashMap<String, String>` where keys are property names
+    /// (e.g., "id", "type", "media.class", "node.name") and values are the corresponding values
+    /// (quotes stripped). The "id" and "type" fields are extracted from the object header line.
+    ///
+    /// Returns an error if `pw-cli` is not found, fails to execute, or the output cannot be parsed.
+    pub fn list_audio_devices(&self) -> Result<Vec<HashMap<String, String>>> {
+        let output = Command::new("pw-cli")
+            .arg("list-objects")
+            .output()
+            .with_context(|| "Failed to execute pw-cli command. Ensure pw-cli is installed and in PATH.")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("pw-cli failed with status {}: {}", output.status, stderr);
+        }
+
+        let stdout = String::from_utf8(output.stdout)
+            .with_context(|| "pw-cli output is not valid UTF-8")?;
+
+        Self::parse_pwcli_output(&stdout)
+    }
+
+    /// Parses the stdout of `pw-cli list-objects` into a vector of property maps.
+    ///
+    /// The expected format is:
+    /// ```ignore
+    /// id X, type Y
+    ///     key1 = "value1"
+    ///     key2 = value2
+    /// ```
+    /// Lines are trimmed; empty lines are ignored.
+    fn parse_pwcli_output(output: &str) -> Result<Vec<HashMap<String, String>>> {
+        let mut objects = Vec::new();
+        let mut current_obj: Option<HashMap<String, String>> = None;
+
+        for line in output.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            // Check if line starts with "id" and contains "type"
+            if line.starts_with("id ") && line.contains("type ") {
+                // If we have a previous object, push it
+                if let Some(obj) = current_obj.take() {
+                    objects.push(obj);
+                }
+                // Start a new object
+                let mut obj = HashMap::new();
+
+                // Parse id and type
+                // Example: "id 0, type PipeWire:Interface:Core/4"
+                let parts: Vec<&str> = line.splitn(2, ',').collect();
+                if parts.len() >= 1 {
+                    let id_part = parts[0].trim();
+                    if let Some(id) = id_part.strip_prefix("id ") {
+                        obj.insert("id".to_string(), id.trim().to_string());
+                    }
+                }
+                if parts.len() >= 2 {
+                    let type_part = parts[1].trim();
+                    if let Some(type_val) = type_part.strip_prefix("type ") {
+                        obj.insert("type".to_string(), type_val.trim().to_string());
+                    }
+                }
+                current_obj = Some(obj);
+            } else if let Some(ref mut obj) = current_obj {
+                // Parse key = value line
+                // Lines are indented with spaces/tabs; we already trimmed.
+                // Split at first '=' (there may be spaces around it)
+                let parts: Vec<&str> = line.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    let key = parts[0].trim().to_string();
+                    let mut value = parts[1].trim().to_string();
+                    // Strip surrounding double quotes if present
+                    if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+                        value = value[1..value.len() - 1].to_string();
+                    }
+                    obj.insert(key, value);
+                }
+                else { // If line doesn't contain '=', ignore (should not happen)
+                    warn!("Could not parse line in pw-cli output: {line}");
+                }
+                
+            }
+        }
+
+        // Push the last object
+        if let Some(obj) = current_obj.take() {
+            objects.push(obj);
+        }
+
+        Ok(objects)
+    }
+
+    /// Filters a list of audio device objects, returning only those that are audio sinks.
+    ///
+    /// An audio sink is defined as having a property `media.class` equal to `"Audio/Sink"`.
+    /// The returned vector contains clones of the matching entries.
+    pub fn filter_audio_sinks(devices: &Vec<HashMap<String, String>>) -> Vec<HashMap<String, String>> {
+        devices
+            .iter()
+            .filter(|obj| {
+                match obj.get("media.class") {
+                    Some(v) => v == "Audio/Sink",
+                    None => false,
+                }
+            })
+            .cloned()
+            .collect()
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_pwcli_output() {
+        let input = r#"id 0, type PipeWire:Interface:Core/4
+                object.serial = "0"
+                core.name = "pipewire-0"
+            id 36, type PipeWire:Interface:Node/3
+                object.serial = "36"
+                factory.id = "19"
+                media.class = "Audio/Sink"
+                node.name = "effect_input.virtual-surround-7.1-buttface"
+            id 37, type PipeWire:Interface:Node/3
+                object.serial = "37"
+                media.class = "Stream/Output/Audio""#;
+
+        let result = ConfigManager::parse_pwcli_output(input).unwrap();
+        assert_eq!(result.len(), 3);
+
+        let first = &result[0];
+        assert_eq!(first.get("id"), Some(&"0".to_string()));
+        assert_eq!(first.get("type"), Some(&"PipeWire:Interface:Core/4".to_string()));
+        assert_eq!(first.get("object.serial"), Some(&"0".to_string()));
+        assert_eq!(first.get("core.name"), Some(&"pipewire-0".to_string()));
+
+        let second = &result[1];
+        assert_eq!(second.get("media.class"), Some(&"Audio/Sink".to_string()));
+        assert_eq!(second.get("node.name"), Some(&"effect_input.virtual-surround-7.1-buttface".to_string()));
+
+        let third = &result[2];
+        assert_eq!(third.get("media.class"), Some(&"Stream/Output/Audio".to_string()));
+    }
+
+    #[test]
+    fn test_parse_without_quotes() {
+        let input = r#"id 99, type Test
+                key = value
+                quoted = "value with spaces""#;
+        let result = ConfigManager::parse_pwcli_output(input).unwrap();
+        let obj = &result[0];
+        assert_eq!(obj.get("key"), Some(&"value".to_string()));
+        assert_eq!(obj.get("quoted"), Some(&"value with spaces".to_string()));
+    }
+
+    #[test]
+    fn test_filter_audio_sinks() {
+        let mut dev1 = HashMap::new();
+        dev1.insert("id".to_string(), "36".to_string());
+        dev1.insert("media.class".to_string(), "Audio/Sink".to_string());
+        let mut dev2 = HashMap::new();
+        dev2.insert("id".to_string(), "37".to_string());
+        dev2.insert("media.class".to_string(), "Stream/Output/Audio".to_string());
+        let mut dev3 = HashMap::new();
+        dev3.insert("id".to_string(), "38".to_string());
+        // no media.class
+
+        let devices = vec![dev1, dev2, dev3];
+        let filtered = ConfigManager::filter_audio_sinks(&devices);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].get("id"), Some(&"36".to_string()));
     }
 }
