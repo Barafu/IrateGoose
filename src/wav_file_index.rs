@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[derive(Clone, Default)]
 pub struct WavFileIndex {
     items: Vec<WavFileData>,
-    checksum_index: HashMap<u64, usize>,
+    checksum_index: HashMap<u128, usize>,
 }
 
 impl WavFileIndex {
@@ -72,7 +72,7 @@ impl WavFileIndex {
     /// Returns a reference to the item with the given checksum, if it exists.
     ///
     /// this method returns `None` for `checksum == 0`.
-    pub fn get_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
+    pub fn get_by_checksum(&self, checksum: u128) -> Option<&WavFileData> {
         if checksum == 0 {
             return None;
         }
@@ -84,7 +84,7 @@ impl WavFileIndex {
     /// Returns the index (position) of the item with the given checksum, if it exists.
     ///
     /// Returns `None` for `checksum == 0` or if the checksum is not present in the index.
-    pub fn index_of_checksum(&self, checksum: u64) -> Option<usize> {
+    pub fn index_of_checksum(&self, checksum: u128) -> Option<usize> {
         if checksum == 0 {
             return None;
         }

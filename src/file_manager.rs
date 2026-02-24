@@ -11,7 +11,7 @@ use std::{
 use crate::descriptions::HRTFMetadata;
 use crate::settings::AppSettings;
 use crate::wav_file_index::WavFileIndex;
-use xxhash_rust::xxh3::xxh3_64;
+use xxhash_rust::xxh3::xxh3_128;
 
 pub struct FileManager {
     settings: Rc<RefCell<AppSettings>>,
@@ -29,7 +29,7 @@ pub struct WavFileData {
     pub relative_path: PathBuf,
     pub sample_rate: WaveSampleRate,
     pub metadata: Option<Rc<HRTFMetadata>>,
-    pub checksum: u64,
+    pub checksum: u128,
 }
 
 // Detected sample rate of Wav file
@@ -71,7 +71,7 @@ impl FileManager {
         // This will store intermediate results
         struct FileMetadataRecord {
             samplerate: WaveSampleRate,
-            checksum: u64,
+            checksum: u128,
         }
         // Copy all file paths, keeping the order
         let paths: Vec<PathBuf> = self
@@ -124,7 +124,7 @@ impl FileManager {
         Ok(wav_index)
     }
 
-    fn detect_sample_rate_and_checksum(path: &Path) -> (WaveSampleRate, u64) {
+    fn detect_sample_rate_and_checksum(path: &Path) -> (WaveSampleRate, u128) {
         // Read entire file
         let data = match std::fs::read(path) {
             Ok(data) => data,
@@ -151,7 +151,7 @@ impl FileManager {
         };
 
         // Compute xxh3 hash
-        let hash = xxh3_64(&data);
+        let hash = xxh3_128(&data);
 
         (wave_sample_rate, hash)
     }

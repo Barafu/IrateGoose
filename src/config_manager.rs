@@ -8,7 +8,7 @@ use std::process::Command;
 use std::rc::Rc;
 
 use crate::settings::AppSettings;
-use xxhash_rust::xxh3::xxh3_64;
+use xxhash_rust::xxh3::xxh3_128;
 
 /// Manages PipeWire configuration files, NOT application configuration.
 /// This class handles creation, deletion, and application of PipeWire config files
@@ -156,10 +156,10 @@ impl ConfigManager {
     }
 
     /// Checks if the config file exists and returns the checksum of the configured WAV file.
-    /// Returns Ok(Some(u64)) if config exists and contains a valid filename; checksum is 0 if file is damaged.
+    /// Returns Ok(Some(u128)) if config exists and contains a valid filename; checksum is 0 if file is damaged.
     /// Returns Ok(None) if config file does not exist.
     /// Returns Err(String) if config exists but cannot be read or parsed.
-    pub fn config_exists(&self) -> Result<Option<u64>, String> {
+    pub fn config_exists(&self) -> Result<Option<u128>, String> {
         if !self.config_path.exists() {
             return Ok(None);
         }
@@ -177,7 +177,7 @@ impl ConfigManager {
             Ok(data) => {
                 // Basic WAV header check (optional)
                 if data.len() >= 28 && &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
-                    xxh3_64(&data)
+                    xxh3_128(&data)
                 } else {
                     0 // Damaged or not a WAV
                 }

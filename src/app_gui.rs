@@ -42,12 +42,12 @@ pub struct AppGUI<'a> {
 
     // === UI state ===
     // Checksum of selected file (None if none selected)
-    selected_checksum: Option<u64>,
+    selected_checksum: Option<u128>,
     // Currently selected sample rate filter
     sample_rate_filter: WaveSampleRate,
     // Checksum of the WAV file set in installed Pipewire config file if any
     // None = no config, Some(0) = config exists but file is damaged, Some(nonzero) = valid checksum
-    config_installed: Option<u64>,
+    config_installed: Option<u128>,
     // Search filter text
     search_text: String,
     // Currently selected tab (Files/Options)
@@ -227,7 +227,7 @@ impl<'a> AppGUI<'a> {
 
     /// Checks if Pipewire config exists and returns the checksum if found.
     /// Returns None if config doesn't exist or there's an error.
-    fn check_config_exists(config_manager: &ConfigManager) -> Option<u64> {
+    fn check_config_exists(config_manager: &ConfigManager) -> Option<u128> {
         match config_manager.config_exists() {
             Ok(Some(checksum)) => Some(checksum),
             Ok(None) => None,
@@ -299,7 +299,7 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Find wav data by checksum.
-    fn find_wav_by_checksum(&self, checksum: u64) -> Option<&WavFileData> {
+    fn find_wav_by_checksum(&self, checksum: u128) -> Option<&WavFileData> {
         self.all_wav_index.get_by_checksum(checksum)
     }
 
@@ -420,7 +420,7 @@ impl<'a> AppGUI<'a> {
                 .body(|body| {
                     // Table rows are generated here
                     body.rows(row_height, num_rows, |mut row| {
-                        let selected_checksum: Option<u64> = self.selected_checksum;
+                        let selected_checksum: Option<u128> = self.selected_checksum;
                         let wave: &WavFileData = self
                             .get_filtered_wav_files()
                             .get_by_index(row.index())
