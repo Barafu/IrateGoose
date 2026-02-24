@@ -4,6 +4,22 @@ IrateGoose is a graphical application that configures PipeWire to create a virtu
 
 <img width="1028" height="797" alt="irate_goose_mainwindow" src="https://github.com/user-attachments/assets/f2029404-be7a-469b-baea-fa3a9a1a2519" style="width:50%; height:auto;"/>
 
+## Table of Contents
+
+- [How It Works](#how-it-works)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Integration with EasyEffects](#integration-with-easyeffects)
+- [Finding the Right IR File](#finding-the-right-ir-file)
+- [Troubleshooting](#troubleshooting)
+- [Removing Configuration](#removing-configuration)
+- [Technical Details](#technical-details)
+- [For Packaging](#for-packaging)
+- [Building from Source](#building-from-source)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+- [Support and Feedback](#support-and-feedback)
+
 ## How It Works
 
 IrateGoose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
@@ -104,16 +120,26 @@ The application can recognize some well-known IR files (by file name only) and s
 - **Description** of the measurement subject or method
 - **Source** and **credits** for the data
 
-### Configure Options (Optional)
+### Configure Options
 Before applying configuration, you can customize settings on the **Options tab**:
 - **Virtual Device Name**: Choose a custom name for your virtual sound card
 - **WAV Folder**: Set the directory containing your WAV files
+- **Output Device**: Select which audio sink the virtual surround should output to (default: Auto - let PipeWire decide)
+
+### About Output Device Selection
+The **Output Device** option allows you to specify where the virtual surround sound should be routed:
+
+- **Auto (default)**: Let PipeWire automatically choose the output device. This is usually your default audio output.
+- **Specific audio sink**: Select a particular output device (like "Built-in Audio", "HDMI", or "USB Headphones") to force the virtual surround to always output to that device.
+
+This is useful when you have multiple audio outputs and want to ensure the virtual surround always plays through a specific device (e.g., always use your headphones even if they're not the default output).
 
 ### Apply Configuration
 Click the **"Create Device"** button to apply your selection. IrateGoose will:
-1. Create a PipeWire configuration file at `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf`
+1. Create a PipeWire configuration file at `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`
 2. Restart PipeWire services to apply the changes
 3. Create a virtual sound card with your chosen name (default: "Virtual Surround Sink")
+4. Configure the output routing based on your Output Device selection
 
 **Important**: You can now close IrateGoose - it doesn't need to keep running! The configuration persists until you change or delete it.
 
@@ -143,6 +169,36 @@ In fact, failing to configure the game, and using two surround emulations at the
 #### System-Wide:
 - Ensure your system audio settings are configured for 7.1 output when using the virtual sink
 
+## Integration with EasyEffects
+
+IrateGoose can be combined with [EasyEffects](https://github.com/wwmm/easyeffects) (a system-wide audio effects processor) to apply additional audio processing like equalization, compression, or reverb after the virtual surround conversion.
+
+### Configuration Steps
+
+1. **Configure EasyEffects**:
+   - Launch EasyEffects and ensure it has created its virtual device
+   - Go to **Preferences → Audio** and disable the checkbox **"Process all output streams"**
+     - *Explanation*: By default, EasyEffects aggressively grabs audio from all applications. Disabling this option allows IrateGoose to process the audio first, then pass it to EasyEffects for further processing.
+   - In **PipeWire → General**, set a fixed output device where you want the final sound to play (e.g., your headphones)
+
+2. **Configure IrateGoose**:
+   - Launch IrateGoose
+   - Go to the **Options tab**
+   - In the **Output Device** dropdown, select the EasyEffects device (it should appear as "easyeffects_sink" or similar)
+   - Select your desired IR file and click **"Create Device"**
+
+3. **Set Playback Device**:
+   - Open your system sound settings (KDE System Settings, pavucontrol, etc.)
+   - Select the IrateGoose virtual device (e.g., "Virtual Surround Sink") as your playback device
+
+### How It Works
+The audio chain will be:
+**Application → IrateGoose Virtual Surround → EasyEffects → Physical Output Device**
+
+This setup allows you to enjoy spatial audio from IrateGoose while also benefiting from EasyEffects' audio enhancements like bass boost, equalization, or noise suppression.
+
+**Important reminder**: When you disable or remove the IrateGoose virtual device, remember to re-enable **"Process all output streams"** in EasyEffects Preferences → Audio. Otherwise, EasyEffects will not process any audio since it's expecting to receive audio from IrateGoose's virtual device.
+
 ## Finding the Right IR File
 
 **The perception of spatial audio cues is as personal as a sense of smell.** Different HRTF measurements work better for different people due to variations in head shape, ear anatomy, and personal preference.
@@ -164,11 +220,12 @@ Expect to spend some time trying different IR files until you find one that suit
 
 ### Virtual Sound Card Not Appearing
 - **KDE Plasma**: Enable "Show virtual devices" in sound settings
-- **Restart audio**: Run `systemctl --user restart wireplumber pipewire pipewire-pulse`
-- **Check configuration**: Ensure IrateGoose successfully wrote the config (look for `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf`)
+- **Restart audio**: Run `systemctl --user restart pipewire pipewire-pulse`
+- **Check configuration**: Ensure IrateGoose successfully wrote the config (look for `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`)
 
 ### No Sound or Distorted Audio
 - Verify you've selected your virtual sound card as output device (default name: "Virtual Surround Sink", but you can customize it on the Options tab)
+- **Check Output Device selection**: If you selected a specific output device in the Options tab, ensure that device is connected and active. Try switching to "Auto" to let PipeWire decide.
 - Check that your application is outputting 7.1 audio, not stereo
 - Try a different IR file (some may be incompatible or damaged)
 - Ensure your headphones are properly connected
@@ -187,6 +244,22 @@ To remove the virtual surround sink and return to normal audio:
 2. Click the **"Remove device"** button
 3. The virtual sound card will be removed after PipeWire services restart
 4. Select your original audio device in system settings
+
+### Manual Removal (if IrateGoose doesn't work)
+
+If IrateGoose is not functioning properly and you need to remove the configuration manually:
+
+1. **Delete the PipeWire configuration file**:
+   ```bash
+   rm ~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf
+   ```
+
+2. **Restart PipeWire services**:
+   ```bash
+   systemctl --user restart pipewire pipewire-pulse
+   ```
+
+This will completely remove the virtual surround sink and restore your normal audio configuration.
 
 ## Technical Details
 
