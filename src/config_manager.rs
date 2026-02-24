@@ -99,6 +99,12 @@ impl ConfigManager {
         // Copy the selected WAV file into the hrir directory, preserving its filename
         let target_path = self.copy_wav_to_hrir(wavefile_path, &hrir_dir)?;
 
+        // Determine output device replacement
+        let output_device_replacement = match &self.settings.borrow().output_device {
+            None => "# Automatic output selection".to_string(),
+            Some(device) => format!("target.object = \"{}\"", device),
+        };
+
         // Create text for config file using the copied file's absolute path
         let config_text = Self::CONFIG_TEMPLATE
             .replace("{IRFILETEMPLATE}", target_path.to_string_lossy().as_ref())
@@ -106,7 +112,8 @@ impl ConfigManager {
                 "{DEVICENAMETEMPLATE}",
                 &self.settings.borrow().virtual_device_name,
             )
-            .replace("{VIRTUALNODENAME}", Self::VIRTUAL_NODE_SUFFIX);
+            .replace("{VIRTUALNODENAME}", Self::VIRTUAL_NODE_SUFFIX)
+            .replace("{OUTPUTDEVICE}", &output_device_replacement);
 
         // Ensure the parent directory of the config file exists
         if let Some(parent) = self.config_path.parent() {

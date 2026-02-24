@@ -93,6 +93,7 @@ context.modules = [
                 node.passive   = true
                 audio.channels = 2
                 audio.position = [ FL FR ]
+                {OUTPUTDEVICE}
             }
         }
     }
