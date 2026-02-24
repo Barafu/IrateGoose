@@ -901,10 +901,14 @@ impl<'a> eframe::App for AppGUI<'a> {
             ui.horizontal(|ui| {
                 ui.style_mut().spacing.button_padding = (8.0, 6.0).into();
                 // The "Write config" button should be disabled if no file is selected
+                let button_text = match self.config_installed {
+                    Some(_) => "💾 Update device",
+                    None => "💾 Create device",
+                };
                 let write_button = ui.add_enabled(
                     is_file_selected,
                     egui::Button::new(
-                        egui::RichText::new("💾 Create device").heading()
+                        egui::RichText::new(button_text).heading()
                     )
                 );
                 if write_button.clicked() {
