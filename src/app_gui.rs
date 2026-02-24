@@ -646,10 +646,11 @@ impl<'a> AppGUI<'a> {
 
         ui.heading("Output Device");
         ui.label("Select the audio sink where the virtual surround device will output sound:");
-        ui.horizontal(|ui| {
+        ui.horizontal_top(|ui| {
+            ui.label("Output device:");
             // Combobox for sink selection
             let total_items = self.sinks.len() + 1; // +1 for Auto
-            let response = egui::ComboBox::from_label("Output Device")
+            let response = egui::ComboBox::from_label("")
                 .selected_text(self.selected_sink_display_text())
                 .show_index(ui, &mut self.selected_sink_index, total_items, |i| {
                     if i == 0 {
