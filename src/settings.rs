@@ -22,6 +22,9 @@ pub struct AppSettings {
     /// UI theme preference (Light, Dark, or follow system)
     pub theme_preference: ThemePreference,
 
+    /// Selected output sink (audio device) node.name; None = Auto (let PipeWire decide)
+    pub output_device: Option<String>,
+
     /// Active WAV directory (runtime only, not persisted)
     #[serde(skip)]
     active_wav_directory: Option<PathBuf>,
@@ -37,6 +40,7 @@ impl Default for AppSettings {
             wav_directory: None,
             virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
             theme_preference: ThemePreference::System,
+            output_device: None,
             active_wav_directory: None,
             dev_mode: false,
         }

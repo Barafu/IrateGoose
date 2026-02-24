@@ -61,6 +61,12 @@ pub struct AppGUI<'a> {
     // Row index to scroll to (None if no scroll requested)
     scroll_to_row: Option<usize>,
 
+    // === Output device selection ===
+    // List of audio sinks (each a HashMap of properties)
+    sinks: Vec<std::collections::HashMap<String, String>>,
+    // Selected index in combobox (0 = Auto, 1..len = sink index)
+    selected_sink_index: usize,
+
     // Cache for rendering markdown help content
     help_cache: CommonMarkCache,
 
@@ -102,6 +108,19 @@ impl<'a> AppGUI<'a> {
         let theme_preference = settings.borrow().theme_preference;
         cc.egui_ctx.set_theme(theme_preference);
 
+        // Load sinks and compute selected index
+        let sinks = match config_manager.list_audio_devices() {
+            Ok(devices) => ConfigManager::filter_audio_sinks(&devices),
+            Err(e) => {
+                error!("Failed to list audio devices: {}", e);
+                Vec::new()
+            }
+        };
+        let saved_output_device = settings.borrow().output_device.clone();
+        let selected_sink_index = Self::find_sink_index_by_name(&sinks, &saved_output_device)
+            .map(|idx| idx + 1) // +1 because index 0 is Auto
+            .unwrap_or(0);
+
         let mut result = Self {
             settings,
             file_manager,
@@ -121,6 +140,8 @@ impl<'a> AppGUI<'a> {
             theme_preference,
             filtered_wav_index: None,
             scroll_to_row: None,
+            sinks,
+            selected_sink_index,
             help_cache: CommonMarkCache::default(),
         };
 
@@ -128,6 +149,80 @@ impl<'a> AppGUI<'a> {
             error!("Could not rescan wav directory on startup!. Reason: {}", e);
         }
         result
+    }
+
+    /// Find sink index by node.name in the sinks list.
+    /// Returns None if not found.
+    fn find_sink_index_by_name(
+        sinks: &[std::collections::HashMap<String, String>],
+        node_name: &Option<String>,
+    ) -> Option<usize> {
+        let node_name = node_name.as_ref()?;
+        sinks
+            .iter()
+            .position(|s| s.get("node.name") == Some(node_name))
+    }
+
+    /// Generate display text for a sink (two lines).
+    /// First line: node.nick if present, else node.name.
+    /// Second line: node.name.
+    fn sink_display_text(sink: &std::collections::HashMap<String, String>) -> String {
+        let node_name = sink
+            .get("node.name")
+            .filter(|s| !s.is_empty())
+            .map(String::as_str)
+            .unwrap_or("UNKNOWN DEVICE");
+        let first_line = sink
+            .get("node.nick")
+            .map(String::as_str)
+            .unwrap_or(node_name);
+        if first_line == node_name {
+            return format!("{}", node_name);
+        } else {
+            return format!("{}\n{}", first_line, node_name);
+        }
+    }
+
+    /// Refresh the list of sinks from ConfigManager.
+    /// If the currently selected sink (by node.name) is still present in the new list,
+    /// keep it selected; otherwise reset to Auto.
+    fn refresh_sinks(&mut self) {
+        let old_selection = self.settings.borrow().output_device.clone();
+        let new_sinks = match self.config_manager.list_audio_devices() {
+            Ok(devices) => ConfigManager::filter_audio_sinks(&devices),
+            Err(e) => {
+                error!("Failed to refresh audio devices: {}", e);
+                Vec::new()
+            }
+        };
+        self.sinks = new_sinks;
+        // Update selected index
+        self.selected_sink_index = Self::find_sink_index_by_name(&self.sinks, &old_selection)
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        // If selection changed, update settings
+        let new_selection = if self.selected_sink_index == 0 {
+            None
+        } else {
+            self.sinks
+                .get(self.selected_sink_index - 1)
+                .and_then(|s| s.get("node.name").cloned())
+        };
+        if old_selection != new_selection {
+            self.settings.borrow_mut().output_device = new_selection.clone();
+            self.write_settings();
+        }
+    }
+
+    /// Generate display text for the currently selected sink (including Auto).
+    fn selected_sink_display_text(&self) -> String {
+        if self.selected_sink_index == 0 {
+            "Auto\nLet Pipewire decide".to_string()
+        } else if let Some(sink) = self.sinks.get(self.selected_sink_index - 1) {
+            Self::sink_display_text(sink)
+        } else {
+            "Invalid".to_string()
+        }
     }
 
     /// Checks if Pipewire config exists and returns the checksum if found.
@@ -252,7 +347,7 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Gives access to filtered items index, recreating it if it is None.
-    fn get_filtered_items(&mut self) -> &WavFileIndex {
+    fn get_filtered_wav_files(&mut self) -> &WavFileIndex {
         if self.filtered_wav_index.is_some() {
             return self.filtered_wav_index.as_ref().unwrap();
         }
@@ -292,7 +387,7 @@ impl<'a> AppGUI<'a> {
         table_frame.show(ui, |ui| {
             // Create a two-column table using rows() for better performance
             let row_height = 20.0;
-            let num_rows = self.get_filtered_items().len();
+            let num_rows = self.get_filtered_wav_files().len();
             let available_width = ui.available_width();
             let available_height: f32 = ui.available_height() - Self::METADATA_FRAME_HEIGHT;
 
@@ -327,7 +422,7 @@ impl<'a> AppGUI<'a> {
                     body.rows(row_height, num_rows, |mut row| {
                         let selected_checksum: Option<u64> = self.selected_checksum;
                         let wave: &WavFileData = self
-                            .get_filtered_items()
+                            .get_filtered_wav_files()
                             .get_by_index(row.index())
                             .expect("Index out of bounds in table.rows()");
                         let rel_path: &PathBuf = &wave.relative_path;
@@ -440,7 +535,7 @@ impl<'a> AppGUI<'a> {
             }
         });
 
-        if self.get_filtered_items().len() == 0 {
+        if self.get_filtered_wav_files().len() == 0 {
             ui.label("No .wav files matching this filter were found in the directory.");
         } else {
             self.render_file_table(ui);
@@ -544,6 +639,41 @@ impl<'a> AppGUI<'a> {
                 ui.add_enabled(default_button_enabled, egui::Button::new("Default"));
             if default_button.clicked() {
                 self.on_default_device_name_click();
+            }
+        });
+
+        ui.separator();
+
+        ui.heading("Output Device");
+        ui.label("Select the audio sink where the virtual surround device will output sound:");
+        ui.horizontal(|ui| {
+            // Combobox for sink selection
+            let total_items = self.sinks.len() + 1; // +1 for Auto
+            let response = egui::ComboBox::from_label("Output Device")
+                .selected_text(self.selected_sink_display_text())
+                .show_index(ui, &mut self.selected_sink_index, total_items, |i| {
+                    if i == 0 {
+                        "Auto\nLet Pipewire decide".to_string()
+                    } else {
+                        let sink = &self.sinks[i - 1];
+                        Self::sink_display_text(sink)
+                    }
+                });
+            // Update settings if selection changed
+            if response.changed() {
+                let new_selection = if self.selected_sink_index == 0 {
+                    None
+                } else {
+                    self.sinks
+                        .get(self.selected_sink_index - 1)
+                        .and_then(|s| s.get("node.name").cloned())
+                };
+                self.settings.borrow_mut().output_device = new_selection;
+                self.write_settings();
+            }
+            // Reload button
+            if ui.button("Reload").clicked() {
+                self.refresh_sinks();
             }
         });
 

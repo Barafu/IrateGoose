@@ -312,14 +312,16 @@ impl ConfigManager {
 
     /// Filters a list of audio device objects, returning only those that are audio sinks.
     ///
-    /// An audio sink is defined as having a property `media.class` equal to `"Audio/Sink"`.
+    /// An audio sink is defined as having a property `media.class` equal to AUDIO_DEVICE_TYPE.
     /// The returned vector contains clones of the matching entries.
+    
+    const AUDIO_DEVICE_CLASS: &str = "Audio/Sink";
     pub fn filter_audio_sinks(devices: &Vec<HashMap<String, String>>) -> Vec<HashMap<String, String>> {
         devices
             .iter()
             .filter(|obj| {
                 match obj.get("media.class") {
-                    Some(v) => v == "Audio/Sink",
+                    Some(v) => v == ConfigManager::AUDIO_DEVICE_CLASS,
                     None => false,
                 }
             })
