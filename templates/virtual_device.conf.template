@@ -83,13 +83,13 @@ context.modules = [
                 outputs = [ "mixL:Out" "mixR:Out" ]
             }
             capture.props = {
-                node.name      = "effect_input.virtual-surround-7.1-irategooose"
+                node.name      = "effect_input.{VIRTUALNODENAME}"
                 media.class    = Audio/Sink
                 audio.channels = 8
                 audio.position = [ FL FR FC LFE RL RR SL SR ]
             }
             playback.props = {
-                node.name      = "effect_output.virtual-surround-7.1-irategooose"
+                node.name      = "effect_output.{VIRTUALNODENAME}"
                 node.passive   = true
                 audio.channels = 2
                 audio.position = [ FL FR ]

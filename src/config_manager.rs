@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow, bail};
-use log::warn;
+use log::{info, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
@@ -21,7 +21,10 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     /// The config file template
-    const CONFIG_TEMPLATE: &'static str = include_str!("../virtual_device.conf.template");
+    const CONFIG_TEMPLATE: &'static str = include_str!("../templates/virtual_device.conf.template");
+
+    /// Suffix for virtual surround node names (appended after "effect_input." / "effect_output.")
+    const VIRTUAL_NODE_SUFFIX: &str = "virtual-surround-7.1-irategoose";
 
     /// Creates a new ConfigManager instance
     pub fn new(settings: Rc<RefCell<AppSettings>>) -> Result<ConfigManager> {
@@ -35,11 +38,41 @@ impl ConfigManager {
         let config_suffix = if dev_mode {
             "/tmp/surround.conf"
         } else {
-            "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf"
+            "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf"
         };
 
         // Append the config suffix to get the full absolute path
         let config_path = config_dir.join(config_suffix);
+
+        // Migrate config file from old name to new name
+        let old_suffix = "pipewire/pipewire.conf.d/sink-virtual-surround-7.1-hesuvi.conf";
+        let old_path = config_dir.join(old_suffix);
+        let new_path = &config_path; // already uses new suffix
+
+        if old_path.exists() && !new_path.exists() {
+            match std::fs::rename(&old_path, new_path) {
+                Ok(_) => {
+                    info!(
+                        "Renamed config file from {} to {}",
+                        old_path.display(),
+                        new_path.display()
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to rename config file from {} to {}: {}",
+                        old_path.display(),
+                        new_path.display(),
+                        e
+                    );
+                }
+            }
+        } else if old_path.exists() && new_path.exists() {
+            info!(
+                "Probably old config file detected ({}).",
+                old_path.display()
+            );
+        }
 
         Ok(Self {
             config_path,
@@ -72,7 +105,8 @@ impl ConfigManager {
             .replace(
                 "{DEVICENAMETEMPLATE}",
                 &self.settings.borrow().virtual_device_name,
-            );
+            )
+            .replace("{VIRTUALNODENAME}", Self::VIRTUAL_NODE_SUFFIX);
 
         // Ensure the parent directory of the config file exists
         if let Some(parent) = self.config_path.parent() {
@@ -165,7 +199,7 @@ impl ConfigManager {
     }
 
     /// Extracts the filename from config content
-    /// Looks for pattern: filename = "PATH" (with optional spaces)
+    /// Looks for pattern: filename = "..." (with optional spaces)
     fn extract_filename_from_config(content: &str) -> Result<PathBuf, String> {
         // Search for filename = "..." pattern
         // The pattern could be: filename = "/path/to/file.wav"
@@ -224,15 +258,17 @@ impl ConfigManager {
         let output = Command::new("pw-cli")
             .arg("list-objects")
             .output()
-            .with_context(|| "Failed to execute pw-cli command. Ensure pw-cli is installed and in PATH.")?;
+            .with_context(
+                || "Failed to execute pw-cli command. Ensure pw-cli is installed and in PATH.",
+            )?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("pw-cli failed with status {}: {}", output.status, stderr);
         }
 
-        let stdout = String::from_utf8(output.stdout)
-            .with_context(|| "pw-cli output is not valid UTF-8")?;
+        let stdout =
+            String::from_utf8(output.stdout).with_context(|| "pw-cli output is not valid UTF-8")?;
 
         Self::parse_pwcli_output(&stdout)
     }
@@ -294,11 +330,10 @@ impl ConfigManager {
                         value = value[1..value.len() - 1].to_string();
                     }
                     obj.insert(key, value);
-                }
-                else { // If line doesn't contain '=', ignore (should not happen)
+                } else {
+                    // If line doesn't contain '=', ignore (should not happen)
                     warn!("Could not parse line in pw-cli output: {line}");
                 }
-                
             }
         }
 
@@ -312,23 +347,25 @@ impl ConfigManager {
 
     /// Filters a list of audio device objects, returning only those that are audio sinks.
     ///
-    /// An audio sink is defined as having a property `media.class` equal to AUDIO_DEVICE_TYPE.
+    /// An audio sink is defined as having a property `media.class` equal to AUDIO_DEVICE_TYPE. Skips
+    /// IrateGoose virtual device.
     /// The returned vector contains clones of the matching entries.
-    
+
     const AUDIO_DEVICE_CLASS: &str = "Audio/Sink";
-    pub fn filter_audio_sinks(devices: &Vec<HashMap<String, String>>) -> Vec<HashMap<String, String>> {
+    pub fn filter_audio_sinks(
+        devices: &Vec<HashMap<String, String>>,
+    ) -> Vec<HashMap<String, String>> {
+        let irategoose_node = format!("effect_input.{}", Self::VIRTUAL_NODE_SUFFIX);
         devices
             .iter()
-            .filter(|obj| {
-                match obj.get("media.class") {
-                    Some(v) => v == ConfigManager::AUDIO_DEVICE_CLASS,
-                    None => false,
-                }
+            .filter(|obj| match obj.get("media.class") {
+                Some(v) => v == ConfigManager::AUDIO_DEVICE_CLASS,
+                None => false,
             })
+            .filter(|obj| obj.get("node.name").as_deref() != Some(&irategoose_node))
             .cloned()
             .collect()
     }
-
 }
 
 #[cfg(test)]
@@ -354,16 +391,25 @@ mod tests {
 
         let first = &result[0];
         assert_eq!(first.get("id"), Some(&"0".to_string()));
-        assert_eq!(first.get("type"), Some(&"PipeWire:Interface:Core/4".to_string()));
+        assert_eq!(
+            first.get("type"),
+            Some(&"PipeWire:Interface:Core/4".to_string())
+        );
         assert_eq!(first.get("object.serial"), Some(&"0".to_string()));
         assert_eq!(first.get("core.name"), Some(&"pipewire-0".to_string()));
 
         let second = &result[1];
         assert_eq!(second.get("media.class"), Some(&"Audio/Sink".to_string()));
-        assert_eq!(second.get("node.name"), Some(&"effect_input.virtual-surround-7.1-buttface".to_string()));
+        assert_eq!(
+            second.get("node.name"),
+            Some(&"effect_input.virtual-surround-7.1-buttface".to_string())
+        );
 
         let third = &result[2];
-        assert_eq!(third.get("media.class"), Some(&"Stream/Output/Audio".to_string()));
+        assert_eq!(
+            third.get("media.class"),
+            Some(&"Stream/Output/Audio".to_string())
+        );
     }
 
     #[test]

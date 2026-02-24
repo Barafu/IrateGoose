@@ -22,9 +22,6 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea directory.
 #.idea/
 
-
-# Added by cargo
-
-/target
+plans
 
 irate_goose_dev_settings.toml
