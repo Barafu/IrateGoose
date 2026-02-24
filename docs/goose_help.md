@@ -18,6 +18,7 @@ Options Tab
 -----------
 - Set directory containing WAV files
 - Customize virtual device name
+- Select output device (Auto or specific audio sink)
 - Choose UI theme (light/dark)
 
 Log Tab
@@ -39,6 +40,7 @@ No virtual device?
 
 No sound?
 - Confirm virtual device is selected as output
+- Check output device selection in Options tab (try "Auto" if specific device isn't working)
 - Ensure applications output 7.1 audio
 - Try a different IR file
 
@@ -54,7 +56,7 @@ Create: Select file, click "💾 Create device"
 Remove: Click "❌ Remove device"
 
 
-Change: Select new file, click "💾 Create device" again
+Change: Select new file, click "💾 Update device"
 
 Command Line
 ------------
