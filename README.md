@@ -6,13 +6,18 @@ IrateGoose is a graphical application that configures PipeWire to create a virtu
 
 ## Table of Contents
 
+**User Guide**
 - [How It Works](#how-it-works)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Integration with EasyEffects](#integration-with-easyeffects)
 - [Finding the Right IR File](#finding-the-right-ir-file)
+
+**Troubleshooting & Maintenance**
 - [Troubleshooting](#troubleshooting)
 - [Removing Configuration](#removing-configuration)
+
+**Development & Resources**
 - [Technical Details](#technical-details)
 - [For Packaging](#for-packaging)
 - [Building from Source](#building-from-source)
