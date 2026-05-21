@@ -12,6 +12,7 @@ use crate::wav_file_index::WavFileIndex;
 use egui_commonmark::{CommonMarkCache, commonmark_str};
 use log::{error, info, warn};
 use std::sync::{Arc, Mutex};
+use walkdir::WalkDir;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -535,7 +536,14 @@ impl<'a> AppGUI<'a> {
             }
         });
 
-        if self.get_filtered_wav_files().len() == 0 {
+        if self.all_wav_index.len() == 0 {
+            ui.label("");
+            ui.label("Irate Goose needs IR (Impulse Response) files to create a virtual surround sound effect.");
+            ui.label("No IR files were found in the selected directory.");
+            ui.label("Some ways to obtain IR files are described on the project page:");
+            ui.hyperlink_to("Irate Goose GitHub", "https://github.com/Barafu/IrateGoose");
+        } else if self.get_filtered_wav_files().len() == 0 {
+            ui.label("");
             ui.label("No .wav files matching this filter were found in the directory.");
         } else {
             self.render_file_table(ui);
@@ -834,7 +842,42 @@ impl<'a> AppGUI<'a> {
         }
         // Auto‑select the file that matches the installed config (if any)
         self.apply_auto_selection();
+
+        // If no WAV files found, check if the directory contains .tar.zstd archives
+        if self.all_wav_index.len() == 0 && self.contains_tar_zstd() {
+            self.show_modal(
+                "Archives Found",
+                "No IR files were found in the directory, but .tar.zstd archives were detected.\n\n\
+                You need to unpack the archive files before IrateGoose can use them.\n\
+                Navigate to the project page for instructions on how to obtain and install IR files.",
+            );
+        }
+
         Ok(())
+    }
+
+    /// Checks the configured WAV directory for `.tar.zstd` archives.
+    fn contains_tar_zstd(&self) -> bool {
+        let dir = match self.settings.borrow().get_wav_directory() {
+            Some(d) => d,
+            None => return false,
+        };
+        WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .any(|entry| {
+                entry.file_type().is_file()
+                    && entry
+                        .path()
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .is_some_and(|e| e.eq_ignore_ascii_case("zstd"))
+                    && entry
+                        .path()
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|s| s.ends_with(".tar"))
+            })
     }
 
     /// Handles the "Apply" button click for virtual device name.
