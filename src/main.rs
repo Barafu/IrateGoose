@@ -71,7 +71,7 @@ fn main() {
     };
 
     // Load icon from embedded PNG bytes (same as used in goose.rs)
-    let icon_bytes = crate::goose::ICON_BYTES;
+    let icon_bytes = include_bytes!("../data/IrateGoose256.png");
     let icon = match from_png_bytes(icon_bytes) {
         Ok(icon) => icon,
         Err(e) => {

@@ -54,8 +54,11 @@ Download the latest binary from the [Releases page](https://github.com/Barafu/Ir
 ### Step 2: Obtain IR Files
 IrateGoose requires impulse response files in WAV format compatible with HeSuVi. You have several options:
 
-1. **Download from collection**: Get IR files from the website:
-   [https://airtable.com/appayGNkn3nSuXkaz/shruimhjdSakUPg2m/tbloLjoZKWJDnLtTc](https://airtable.com/appayGNkn3nSuXkaz/shruimhjdSakUPg2m/tbloLjoZKWJDnLtTc)
+1. **Download full collection**: Get IR files from the Internet:
+
+ - Small collection (27Mb) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_small.tar.zstd)
+ - Full collection (153Mb, includes Small) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
+ - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
 
 2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with IrateGoose.
 

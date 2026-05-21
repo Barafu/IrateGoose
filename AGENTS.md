@@ -16,9 +16,11 @@
 ## Testing
 
  - Do not create new tests unless the user explicitly instructs you to do it. 
+ - Run 'cargo check' after making changes in code. 
 
 ## Rules
  
  - When you need to search docs, use `context7` tools.
+ - Always write doc comments (`///`) for every struct and function. Use regular comments (`//`) to explain large or non-obvious blocks of code.
 
 
