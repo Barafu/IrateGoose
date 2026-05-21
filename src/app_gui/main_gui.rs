@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::app_gui::theme::{detect_system_theme, DetectedTheme};
 use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
@@ -104,9 +105,10 @@ impl<'a> AppGUI<'a> {
         // Initialize device_name_text from settings
         let device_name_text = settings.borrow().virtual_device_name.clone();
 
-        // Initialize theme preference from settings and apply it
+        // Initialize theme preference from settings, resolving System via D-Bus
         let theme_preference = settings.borrow().theme_preference;
-        cc.egui_ctx.set_theme(theme_preference);
+        let resolved = resolve_theme(theme_preference);
+        cc.egui_ctx.set_theme(resolved);
 
         // Load sinks and compute selected index
         let sinks = match config_manager.list_audio_devices() {
@@ -421,13 +423,18 @@ impl<'a> AppGUI<'a> {
         ui.heading("UI Theme");
         ui.label("Select the application visual theme:");
         let old_preference = self.theme_preference;
-        self.theme_preference.radio_buttons(ui);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::Light, "🌞 Light");
+            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::Dark, "🌙 Dark");
+            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::System, "🌟 System");
+        });
         if self.theme_preference != old_preference {
             // Update settings
             self.settings.borrow_mut().theme_preference = self.theme_preference;
             self.write_settings();
-            // Apply immediately
-            ui.ctx().set_theme(self.theme_preference);
+            // Resolve and apply immediately
+            let resolved = resolve_theme(self.theme_preference);
+            ui.ctx().set_theme(resolved);
         }
 
         if self.settings.borrow().dev_mode {
@@ -514,6 +521,22 @@ impl<'a> AppGUI<'a> {
         if let Err(e) = save_result {
             self.show_modal("Settings Error", &format!("Failed to save settings: {}", e));
         }
+    }
+}
+
+/// Resolve a `ThemePreference` to a concrete theme.
+///
+/// For `System` the preference is obtained via D-Bus from the Freedesktop portal.
+/// Falls back to dark when detection fails.
+fn resolve_theme(preference: egui::ThemePreference) -> egui::ThemePreference {
+    match preference {
+        egui::ThemePreference::Dark => egui::ThemePreference::Dark,
+        egui::ThemePreference::Light => egui::ThemePreference::Light,
+        egui::ThemePreference::System => match detect_system_theme() {
+            Some(DetectedTheme::Dark) => egui::ThemePreference::Dark,
+            Some(DetectedTheme::Light) => egui::ThemePreference::Light,
+            None => egui::ThemePreference::Dark,
+        },
     }
 }
 
