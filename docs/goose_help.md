@@ -1,4 +1,4 @@
-IrateGoose - Virtual Surround Sound
+Irate Goose - Virtual Surround Sound
 
 Quick Start
 -----------
@@ -66,4 +66,4 @@ irate_goose --install
 irate_goose --uninstall
 ```
 
-Note: Virtual device works system-wide. IrateGoose doesn't need to run after configuration.
+Note: Virtual device works system-wide. Irate Goose doesn't need to run after configuration.

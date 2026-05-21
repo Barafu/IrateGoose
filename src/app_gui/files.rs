@@ -247,7 +247,7 @@ impl<'a> AppGUI<'a> {
             ui.label("Irate Goose needs IR (Impulse Response) files to create a virtual surround sound effect.");
             ui.label("No IR files were found in the selected directory.");
             ui.label("Some ways to obtain IR files are described on the project page:");
-            ui.hyperlink_to("Irate Goose GitHub", "https://github.com/Barafu/IrateGoose");
+            ui.hyperlink_to(" Irate Goose GitHub", "https://github.com/Barafu/IrateGoose");
         } else if self.get_filtered_wav_files().len() == 0 {
             ui.label("");
             ui.label("No .wav files matching this filter were found in the directory.");
@@ -392,7 +392,7 @@ impl<'a> AppGUI<'a> {
             self.show_modal(
                 "Archives Found",
                 "No IR files were found in the directory, but .tar.zstd archives were detected.\n\n\
-                You need to unpack the archive files before IrateGoose can use them.\n\
+                You need to unpack the archive files before Irate Goose can use them.\n\
                 Navigate to the project page for instructions on how to obtain and install IR files.",
             );
         }

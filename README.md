@@ -1,6 +1,6 @@
-# IrateGoose - Virtual Surround Sound for PipeWire
+# Irate Goose - Virtual Surround Sound for PipeWire
 
-IrateGoose is a graphical application that configures PipeWire to create a virtual sound card providing spatial audio directionality in headphones. It transforms standard 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, giving you immersive 3D audio perception through regular stereo headphones.
+Irate Goose is a graphical application that configures PipeWire to create a virtual sound card providing spatial audio directionality in headphones. It transforms standard 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, giving you immersive 3D audio perception through regular stereo headphones.
 
 <img width="1028" height="797" alt="irate_goose_mainwindow" src="https://github.com/user-attachments/assets/f2029404-be7a-469b-baea-fa3a9a1a2519" style="width:50%; height:auto;"/>
 
@@ -27,7 +27,7 @@ IrateGoose is a graphical application that configures PipeWire to create a virtu
 
 ## How It Works
 
-IrateGoose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
+Irate Goose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
 
 ### HRTF (Head-Related Transfer Function)
 HRTF is a mathematical model that describes how sound reaches your ears from different directions in space. It accounts for the shape of your head, ears, and torso, which affect how you perceive sound direction. By applying HRTF processing to surround sound, you can experience convincing 3D audio through headphones.
@@ -36,10 +36,10 @@ HRTF is a mathematical model that describes how sound reaches your ears from dif
 A convolver is a digital signal processing component that applies an impulse response to an audio signal. In this context, it takes the 7.1 channel audio and "convolves" it with HRTF data to create binaural output that mimics how sound would arrive at your ears from different directions.
 
 ### Impulse Response (IR) File
-An impulse response file (typically a WAV file) contains the acoustic "fingerprint" of how a sound system (or in this case, a human hearing system) responds to an impulse. IR files contain measurements of how sound from each direction reaches both ears. IrateGoose uses multi-channel WAV files where each channel corresponds to a different speaker position.
+An impulse response file (typically a WAV file) contains the acoustic "fingerprint" of how a sound system (or in this case, a human hearing system) responds to an impulse. IR files contain measurements of how sound from each direction reaches both ears. Irate Goose uses multi-channel WAV files where each channel corresponds to a different speaker position.
 
 ### Compatibility with HeSuVi
-IrateGoose uses the same mathematical processing and the same IR file format as the popular **HeSuVi** (Headphone Surround Virtualization) software. If you're familiar with HeSuVi, you'll find that IrateGoose produces similar audio quality and uses the same IR files. This means you can use your existing HeSuVi IR collection with IrateGoose.
+Irate Goose uses the same mathematical processing and the same IR file format as the popular **HeSuVi** (Headphone Surround Virtualization) software. If you're familiar with HeSuVi, you'll find that Irate Goose produces similar audio quality and uses the same IR files. This means you can use your existing HeSuVi IR collection with Irate Goose.
 
 ## Installation
 
@@ -48,11 +48,11 @@ IrateGoose uses the same mathematical processing and the same IR file format as 
 - **5.1/7.1 channel audio source** (games, media players, etc.)
 - **Stereo headphones** (any quality will work, but better headphones provide better results)
 
-### Step 1: Download IrateGoose
+### Step 1: Download Irate Goose
 Download the latest binary from the [Releases page](https://github.com/Barafu/IrateGoose/releases)
 
 ### Step 2: Obtain IR Files
-IrateGoose requires impulse response files in WAV format compatible with HeSuVi. You have several options:
+Irate Goose requires impulse response files in WAV format compatible with HeSuVi. You have several options:
 
 1. **Download full collection**: Get IR files from the Internet:
 
@@ -60,16 +60,16 @@ IrateGoose requires impulse response files in WAV format compatible with HeSuVi.
  - Full collection (153Mb, includes Small) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
  - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
 
-2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with IrateGoose.
+2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with Irate Goose.
 
 3. **Use your own**: Any multi-channel WAV file in HeSuVi format (14 channels for 7.1 processing) will work.
 
 ### Step 3: Installation Options
 
-IrateGoose offers two installation approaches:
+Irate Goose offers two installation approaches:
 
 #### Option A: Try Out the Application
-If you want to try IrateGoose without installing it permanently:
+If you want to try Irate Goose without installing it permanently:
 1. Download the binary to any location
 2. Start the application
 3. On the **Options tab**, select the folder containing your WAV files
@@ -95,7 +95,7 @@ For permanent installation:
 
 
 ### Command Line Options
-IrateGoose supports several command-line options:
+Irate Goose supports several command-line options:
 
 - **Set WAV folder temporarily**: Specify the WAV folder path as an argument:
   ```bash
@@ -117,7 +117,7 @@ IrateGoose supports several command-line options:
 ## Configuration
 
 ### Select an IR File
-Launch IrateGoose. The application will display a list of detected WAV files with their descriptions:
+Launch Irate Goose. The application will display a list of detected WAV files with their descriptions:
 1. Browse through the available IR files
 2. Use the search box to find specific files
 3. Filter by sample rate (48000 Hz, 44100 Hz, 96000 Hz, or all)
@@ -143,13 +143,13 @@ The **Output Device** option allows you to specify where the virtual surround so
 This is useful when you have multiple audio outputs and want to ensure the virtual surround always plays through a specific device (e.g., always use your headphones even if they're not the default output).
 
 ### Apply Configuration
-Click the **"Create Device"** button to apply your selection. IrateGoose will:
+Click the **"Create Device"** button to apply your selection. Irate Goose will:
 1. Create a PipeWire configuration file at `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`
 2. Restart PipeWire services to apply the changes
 3. Create a virtual sound card with your chosen name (default: "Virtual Surround Sink")
 4. Configure the output routing based on your Output Device selection
 
-**Important**: You can now close IrateGoose - it doesn't need to keep running! The configuration persists until you change or delete it.
+**Important**: You can now close Irate Goose - it doesn't need to keep running! The configuration persists until you change or delete it.
 
 ### Select the Virtual Sound Card
 1. Open your desktop environment's sound settings (KDE System Settings, pavucontrol,  etc.)
@@ -165,7 +165,7 @@ For spatial audio to work correctly, your applications must output **7.1 channel
 - Look for audio settings labeled "7.1 Surround", "Studio Speakers", "Reference Speakers", or "Home Theater"
 - **Avoid** settings labeled "Headphones", "Stereo", or "2.0"
 - Common settings:
-  - **Windows Sonic** or **Dolby Atmos for Headphones**: Disable these if using IrateGoose
+  - **Windows Sonic** or **Dolby Atmos for Headphones**: Disable these if using Irate Goose
   - **Speaker Configuration**: Set to "7.1 Surround" or "7.1 Speakers"
   - **Audio Output**: Set to "Speakers" not "Headphones"
 
@@ -179,33 +179,33 @@ In fact, failing to configure the game, and using two surround emulations at the
 
 ## Integration with EasyEffects
 
-IrateGoose can be combined with [EasyEffects](https://github.com/wwmm/easyeffects) (a system-wide audio effects processor) to apply additional audio processing like equalization, compression, or reverb after the virtual surround conversion.
+Irate Goose can be combined with [EasyEffects](https://github.com/wwmm/easyeffects) (a system-wide audio effects processor) to apply additional audio processing like equalization, compression, or reverb after the virtual surround conversion.
 
 ### Configuration Steps
 
 1. **Configure EasyEffects**:
    - Launch EasyEffects and ensure it has created its virtual device
    - Go to **Preferences → Audio** and disable the checkbox **"Process all output streams"**
-     - *Explanation*: By default, EasyEffects aggressively grabs audio from all applications. Disabling this option allows IrateGoose to process the audio first, then pass it to EasyEffects for further processing.
+     - *Explanation*: By default, EasyEffects aggressively grabs audio from all applications. Disabling this option allows Irate Goose to process the audio first, then pass it to EasyEffects for further processing.
    - In **PipeWire → General**, set a fixed output device where you want the final sound to play (e.g., your headphones)
 
-2. **Configure IrateGoose**:
-   - Launch IrateGoose
+2. **Configure Irate Goose**:
+   - Launch Irate Goose
    - Go to the **Options tab**
    - In the **Output Device** dropdown, select the EasyEffects device (it should appear as "easyeffects_sink" or similar)
    - Select your desired IR file and click **"Create Device"**
 
 3. **Set Playback Device**:
    - Open your system sound settings (KDE System Settings, pavucontrol, etc.)
-   - Select the IrateGoose virtual device (e.g., "Virtual Surround Sink") as your playback device
+   - Select the Irate Goose virtual device (e.g., "Virtual Surround Sink") as your playback device
 
 ### How It Works
 The audio chain will be:
-**Application → IrateGoose Virtual Surround → EasyEffects → Physical Output Device**
+**Application → Irate Goose Virtual Surround → EasyEffects → Physical Output Device**
 
-This setup allows you to enjoy spatial audio from IrateGoose while also benefiting from EasyEffects' audio enhancements like bass boost, equalization, or noise suppression.
+This setup allows you to enjoy spatial audio from Irate Goose while also benefiting from EasyEffects' audio enhancements like bass boost, equalization, or noise suppression.
 
-**Important reminder**: When you disable or remove the IrateGoose virtual device, remember to re-enable **"Process all output streams"** in EasyEffects Preferences → Audio. Otherwise, EasyEffects will not process any audio since it's expecting to receive audio from IrateGoose's virtual device.
+**Important reminder**: When you disable or remove the Irate Goose virtual device, remember to re-enable **"Process all output streams"** in EasyEffects Preferences → Audio. Otherwise, EasyEffects will not process any audio since it's expecting to receive audio from Irate Goose's virtual device.
 
 ## Finding the Right IR File
 
@@ -229,7 +229,7 @@ Expect to spend some time trying different IR files until you find one that suit
 ### Virtual Sound Card Not Appearing
 - **KDE Plasma**: Enable "Show virtual devices" in sound settings
 - **Restart audio**: Run `systemctl --user restart pipewire pipewire-pulse`
-- **Check configuration**: Ensure IrateGoose successfully wrote the config (look for `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`)
+- **Check configuration**: Ensure Irate Goose successfully wrote the config (look for `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`)
 
 ### No Sound or Distorted Audio
 - Verify you've selected your virtual sound card as output device (default name: "Virtual Surround Sink", but you can customize it on the Options tab)
@@ -239,7 +239,7 @@ Expect to spend some time trying different IR files until you find one that suit
 - Ensure your headphones are properly connected
 
 ### Application Errors
-- **"Can not find wave files"**: IrateGoose does not automatically search its own directory for WAV files. You need to:
+- **"Can not find wave files"**: Irate Goose does not automatically search its own directory for WAV files. You need to:
   1. Set the WAV folder on the **Options tab** in the application, OR
   2. Specify the folder path as a command-line argument when launching: `irate_goose /path/to/wav/files`
 - **Permission errors**: Run with appropriate permissions for writing to `~/.config`
@@ -248,14 +248,14 @@ Expect to spend some time trying different IR files until you find one that suit
 ## Removing Configuration
 
 To remove the virtual surround sink and return to normal audio:
-1. Launch IrateGoose
+1. Launch Irate Goose
 2. Click the **"Remove device"** button
 3. The virtual sound card will be removed after PipeWire services restart
 4. Select your original audio device in system settings
 
-### Manual Removal (if IrateGoose doesn't work)
+### Manual Removal (if Irate Goose doesn't work)
 
-If IrateGoose is not functioning properly and you need to remove the configuration manually:
+If Irate Goose is not functioning properly and you need to remove the configuration manually:
 
 1. **Delete the PipeWire configuration file**:
    ```bash
@@ -272,7 +272,7 @@ This will completely remove the virtual surround sink and restore your normal au
 ## Technical Details
 
 ### PipeWire Configuration
-IrateGoose creates a PipeWire filter chain that:
+Irate Goose creates a PipeWire filter chain that:
 - Accepts 8-channel input (7.1 surround: FL, FR, FC, LFE, RL, RR, SL, SR)
 - Applies convolution with the selected HRTF IR file
 - Mixes down to 2-channel binaural output
@@ -280,7 +280,7 @@ IrateGoose creates a PipeWire filter chain that:
 
 ## For Packaging
 
-If you're packaging IrateGoose for distribution, note these dependencies:
+If you're packaging Irate Goose for distribution, note these dependencies:
 
 ### Runtime Dependencies
 - **zstd**: Required for decompressing embedded data
@@ -320,19 +320,19 @@ cargo build --release
 
 ## License
 
-IrateGoose is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Irate Goose is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 The application is developed with the use of DeepSeek LLM. 
 
 ## Acknowledgments
 
 - **PipeWire** developers for the excellent audio system
 - **HRTF researchers** who have made their measurements publicly available
-- All contributors and testers who help improve IrateGoose
+- All contributors and testers who help improve Irate Goose
 - **HeSuVi** for pioneering HRTF-based virtual surround on Windows
 
 ## Support and Feedback
 
 Found a bug? Have a feature request? Please open an issue on the GitHub repository.
 
-So, why IrateGoose?  **I**mpulse **R**esponse, IR. I mean, have you ever seen a goose? They have teeth! On the tongue! 
+So, why Irate Goose?  **I**mpulse **R**esponse, IR. I mean, have you ever seen a goose? They have teeth! On the tongue! 
 

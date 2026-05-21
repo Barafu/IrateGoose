@@ -481,7 +481,7 @@ impl<'a> AppGUI<'a> {
             .show(ui, |ui| {
                 // About section
                 ui.heading("About");
-                ui.label(format!("IrateGoose v{}", VERSION));
+                ui.label(format!("Irate Goose v{}", VERSION));
                 ui.hyperlink_to("Home page", REPOSITORY);
 
                 ui.separator();

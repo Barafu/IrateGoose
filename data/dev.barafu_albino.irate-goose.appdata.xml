@@ -10,14 +10,14 @@
 
   <description>
     <p>
-      IrateGoose is a graphical application that configures PipeWire to
+      Irate Goose is a graphical application that configures PipeWire to
       create a virtual sound card providing spatial audio directionality in
       headphones. It transforms standard 7.1 surround sound into binaural
       audio using Head-Related Transfer Function (HRTF) technology, giving
       you immersive 3D audio perception through regular stereo headphones.
     </p>
     <p>
-      IrateGoose creates a virtual PipeWire sink that processes 7.1 channel
+      Irate Goose creates a virtual PipeWire sink that processes 7.1 channel
       audio through a convolver using HRTF impulse response (IR) files.
       The application can recognize well-known IR files and show additional
       data such as HRTF name, description, source and credits.
