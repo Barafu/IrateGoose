@@ -25,3 +25,5 @@ target
 plans
 
 irate_goose_dev_settings.toml
+
+AppDir*

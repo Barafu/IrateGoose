@@ -127,14 +127,14 @@ fn main() {
 
     let native_options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_app_id("barafu-irategoose")
-            .with_title("IrateGoose - Surround Sound Configurator")
+            .with_app_id("irate_goose")
+            .with_title("Irate Goose - Surround Sound Configurator")
             .with_icon(icon),
         ..eframe::NativeOptions::default()
     };
 
     let _ = eframe::run_native(
-        "IrateGoose - Surround Sound Configurator",
+        "Irate Goose - Surround Sound Configurator",
         native_options,
         Box::new(|cc| {
             // Theme will be set by AppGUI constructor
@@ -157,7 +157,7 @@ fn show_warning(msg: &str) {
     let _ = Command::new("notify-send")
         .args([
             "--urgency=critical",
-            "--app-name=IrateGoose",
+            "--app-name=Irate Goose",
             "--icon=audio-volume-muted",
             msg,
         ])

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.barafu_albino.irate-goose</id>
+
+  <name>Irate Goose</name>
+  <summary>A GUI to configure virtual surround sound capabilities of Pipewire</summary>
+
+  <metadata_license>CC0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      IrateGoose is a graphical application that configures PipeWire to
+      create a virtual sound card providing spatial audio directionality in
+      headphones. It transforms standard 7.1 surround sound into binaural
+      audio using Head-Related Transfer Function (HRTF) technology, giving
+      you immersive 3D audio perception through regular stereo headphones.
+    </p>
+    <p>
+      IrateGoose creates a virtual PipeWire sink that processes 7.1 channel
+      audio through a convolver using HRTF impulse response (IR) files.
+      The application can recognize well-known IR files and show additional
+      data such as HRTF name, description, source and credits.
+    </p>
+  </description>
+
+  <url type="homepage">https://github.com/Barafu/IrateGoose</url>
+  <url type="bugtracker">https://github.com/Barafu/IrateGoose/issues</url>
+
+  <launchable type="desktop-id">dev.barafu_albino.irate-goose.desktop</launchable>
+
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+
+  <content_rating type="oars-1.0">
+  </content_rating>
+
+  <releases>
+    <release version="1.1.0" date="2026-05-21">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
+  </releases>
+
+  <developer id="barafu.albino">
+    <name>Barafu Albino</name>
+  </developer>
+</component>

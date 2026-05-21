@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=IrateGoose
+Name=Irate Goose
 Comment=GUI to configure virtual surround sound capabilities of Pipewire
 Exec={EXEC}
 Icon=barafu-irategoose
@@ -9,3 +9,6 @@ Terminal=false
 StartupNotify=false
 StartupWMClass=irate_goose
 SingleMainWindow=true
+X-AppImage-Version={VERSION}
+X-AppImage-Name=Irate Goose
+X-AppImage-Comment=GUI to configure virtual surround sound capabilities of Pipewire
