@@ -2,7 +2,8 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::config_manager::ConfigManager;
@@ -808,6 +809,25 @@ impl<'a> AppGUI<'a> {
     fn safe_rescan(&mut self) -> anyhow::Result<()> {
         // Clean filtered_items, just to be sure
         self.filtered_wav_index = None;
+
+        // Auto-descend: if the selected directory has no WAV files at root level
+        // and exactly one subfolder, descend into that subfolder
+        {
+            let dir = self.settings.borrow().get_wav_directory();
+            if let Some(ref dir_path) = dir {
+                if dir_path.is_dir()
+                    && !Self::dir_has_wav_files(dir_path)
+                    && Self::subdir_count(dir_path) == 1
+                {
+                    let new_dir = Self::find_single_subdir(dir_path);
+                    self.directory_text = new_dir.to_string_lossy().to_string();
+                    self.settings.borrow_mut().set_wav_directory(Some(new_dir));
+                    self.write_settings();
+                    return self.safe_rescan();
+                }
+            }
+        }
+
         // If get_wav_directory is None, skip scanning
         let original_path = self.settings.borrow().get_wav_directory();
         if original_path.is_none() {
@@ -878,6 +898,40 @@ impl<'a> AppGUI<'a> {
                         .and_then(|s| s.to_str())
                         .is_some_and(|s| s.ends_with(".tar"))
             })
+    }
+
+    /// Checks if a directory has any `.wav` files at the root level (non-recursive).
+    fn dir_has_wav_files(dir: &Path) -> bool {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return false;
+        };
+        entries.flatten().any(|entry| {
+            entry.path().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+    }
+
+    /// Counts immediate subdirectories in a directory.
+    fn subdir_count(dir: &Path) -> usize {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return 0;
+        };
+        entries.flatten().filter(|e| e.path().is_dir()).count()
+    }
+
+    /// Returns the only subdirectory path, panicking if not exactly one exists.
+    /// Call only after verifying `subdir_count(dir) == 1`.
+    fn find_single_subdir(dir: &Path) -> PathBuf {
+        fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .find(|e| e.path().is_dir())
+            .unwrap()
+            .path()
     }
 
     /// Handles the "Apply" button click for virtual device name.
