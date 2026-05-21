@@ -2,17 +2,16 @@ mod app_gui;
 mod config_manager;
 mod descriptions;
 mod file_manager;
-mod goose;
 mod logging;
 mod settings;
 mod wav_file_index;
 
-use clap::{ArgGroup, Parser};
 use log::error;
 use std::cell::RefCell;
+use std::fs;
 use std::process::Command;
 use std::rc::Rc;
-use std::{path::PathBuf, process};
+use walkdir::WalkDir;
 
 use crate::descriptions::Descriptions;
 use crate::settings::AppSettings;
@@ -20,28 +19,6 @@ use app_gui::AppGUI;
 use config_manager::ConfigManager;
 use eframe::{egui::ViewportBuilder, icon_data::from_png_bytes};
 use file_manager::FileManager;
-
-/// Command line arguments
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-#[command(group = ArgGroup::new("install_uninstall").multiple(false).conflicts_with_all(["path"]))]
-struct CliArgs {
-    /// Path to directory containing WAV files
-    #[arg(long)]
-    path: Option<PathBuf>,
-
-    /// Dev-mode (hidden),makes app to write Pipewire config in /tmp instead of proper placement.
-    #[arg(long, hide = true)]
-    dev_mode: bool,
-
-    /// Install the application to the system menu
-    #[arg(long, group = "install_uninstall")]
-    install: bool,
-
-    /// Remove the application from the system menu
-    #[arg(long, group = "install_uninstall")]
-    uninstall: bool,
-}
 
 fn main() {
     // Create shared log buffer
@@ -54,28 +31,10 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Parse CLI arguments
-    let args = CliArgs::parse();
+    migrate_app_entry();
 
-    // Handle install/uninstall commands (exclusive with other arguments)
-    if args.install {
-        if let Err(e) = goose::install_goose() {
-            log::error!("Installation failed: {}", e);
-            process::exit(1);
-        }
-        process::exit(0);
-    }
-    if args.uninstall {
-        if let Err(e) = goose::uninstall_goose() {
-            log::error!("Uninstallation failed: {}", e);
-            process::exit(1);
-        }
-        process::exit(0);
-    }
-
-    // Create a temporary settings instance with the determined dev mode
     let mut temp_settings = AppSettings::default();
-    temp_settings.dev_mode = args.dev_mode;
+    temp_settings.dev_mode = cfg!(debug_assertions);
 
     // Load application settings using the temp settings to determine path
     let loaded_settings = match temp_settings.load() {
@@ -88,17 +47,13 @@ fn main() {
 
     let settings = Rc::new(RefCell::new(loaded_settings));
 
-    if let Some(p) = args.path {
-        settings.borrow_mut().set_temp_wav_directory(p);
-    }
-
     // Descriptions, loads HRTF descriptions from embedded CSV
     let descriptions = match Descriptions::new() {
         Ok(v) => v,
         Err(e) => {
             let err = format!("Can not load HRTF descriptions. Reason: {e}");
             show_warning(&err);
-            process::exit(1);
+            std::process::exit(1);
         }
     };
 
@@ -111,7 +66,7 @@ fn main() {
         Err(e) => {
             let err = format!("Can not process config file. Reason: {e}");
             show_warning(&err);
-            process::exit(1);
+            std::process::exit(1);
         }
     };
 
@@ -147,6 +102,50 @@ fn main() {
             )))
         }),
     );
+}
+
+/// Searches for an old desktop entry file installed by a previous version of
+/// IrateGoose and removes it. This migrates away from the old CLI-based menu
+/// integration. Only searches the per-user XDG applications directory tree.
+fn migrate_app_entry() {
+    let Some(base) = dirs::data_dir().map(|p| p.join("applications")) else {
+        log::warn!("Could not determine data directory, skipping migration");
+        return;
+    };
+    if !base.exists() {
+        return;
+    }
+
+    let found = WalkDir::new(&base)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .find(|e| e.file_name() == "barafu-irategoose.desktop");
+
+    let Some(entry) = found else {
+        return;
+    };
+
+    let path = entry.path();
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("Failed to read {}: {}", path.display(), e);
+            return;
+        }
+    };
+
+    if content.contains("Name=IrateGoose") {
+        if let Err(e) = fs::remove_file(path) {
+            log::warn!("Failed to remove {}: {}", path.display(), e);
+        } else {
+            log::info!("Removed old desktop entry at {}", path.display());
+        }
+    } else {
+        log::info!(
+            "Found {} but content did not match expected pattern, skipping",
+            path.display()
+        );
+    }
 }
 
 /// Tries to show message on CLI and GUI too.

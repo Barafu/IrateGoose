@@ -25,10 +25,6 @@ pub struct AppSettings {
     /// Selected output sink (audio device) node.name; None = Auto (let PipeWire decide)
     pub output_device: Option<String>,
 
-    /// Active WAV directory (runtime only, not persisted)
-    #[serde(skip)]
-    active_wav_directory: Option<PathBuf>,
-
     /// Development mode flag (runtime only, not persisted)
     #[serde(skip)]
     pub dev_mode: bool,
@@ -41,7 +37,6 @@ impl Default for AppSettings {
             virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
             theme_preference: ThemePreference::System,
             output_device: None,
-            active_wav_directory: None,
             dev_mode: false,
         }
     }
@@ -120,20 +115,14 @@ impl AppSettings {
 
     /// Get the WAV directory to use
     pub fn get_wav_directory(&self) -> Option<PathBuf> {
-        self.active_wav_directory
-            .clone()
-            .or_else(|| self.wav_directory.clone())
+        self.wav_directory.clone()
     }
 
     /// Set the WAV directory
     pub fn set_wav_directory(&mut self, path: Option<PathBuf>) {
         self.wav_directory = path;
-        self.active_wav_directory = None;
     }
-    /// Set temporary WAV directory
-    pub fn set_temp_wav_directory(&mut self, path: PathBuf) {
-        self.active_wav_directory = Some(path);
-    }
+
     pub fn is_wav_directory_set(&self) -> bool {
         self.wav_directory.is_some()
     }
