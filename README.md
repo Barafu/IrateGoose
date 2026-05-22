@@ -1,6 +1,6 @@
 # Irate Goose - Virtual Surround Sound for PipeWire
 
-Irate Goose is a graphical application that configures PipeWire to create a virtual sound card providing spatial audio directionality in headphones. It transforms standard 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, giving you immersive 3D audio perception through regular stereo headphones.
+Irate Goose is a graphical application that configures PipeWire to create a virtual sound card for headphones. It transforms 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, delivering immersive 3D audio through regular stereo headphones.
 
 <img width="1028" height="797" alt="irate_goose_mainwindow" src="https://github.com/user-attachments/assets/f2029404-be7a-469b-baea-fa3a9a1a2519" style="width:50%; height:auto;"/>
 
@@ -40,9 +40,9 @@ Irate Goose requires impulse response files in WAV format compatible with HeSuVi
 
 1. **Download full collection**: Get IR files from the Internet:
 
- - Small collection (27Mb) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_small.tar.zstd)
- - Full collection (153Mb, includes Small) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
- - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
+   - Small collection (27 MB) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_small.tar.zstd)
+   - Full collection (153 MB, includes Small) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
+   - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
 
 2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with Irate Goose.
 
@@ -57,7 +57,7 @@ Irate Goose requires impulse response files in WAV format compatible with HeSuVi
    ./IrateGoose-*.AppImage
    ```
 
-AppImages can be run directly without installation. To install it on your system, your Linux distribution likely has its own AppImage manager tool, or you can use **GearLevel** (available as a Flatpak).
+AppImages can be run directly without installation. To integrate it into your application menu, your Linux distribution likely has its own AppImage manager tool, or you can use **GearLevel** (available as a Flatpak).
 
 ### Application icon:
 
@@ -118,7 +118,7 @@ Click the **"Create Device"** button to apply your selection. Irate Goose will:
 **Important**: You can now close Irate Goose - it doesn't need to keep running! The configuration persists until you change or delete it.
 
 ### Select the Virtual Sound Card
-1. Open your desktop environment's sound settings (KDE System Settings, pavucontrol,  etc.)
+1. Open your desktop environment's sound settings (KDE System Settings, pavucontrol, etc.)
 2. Look for "Virtual Surround Sink" in the output devices list
 3. Select it as your playback device
 
@@ -135,10 +135,10 @@ For spatial audio to work correctly, your applications must output **7.1 channel
   - **Speaker Configuration**: Set to "7.1 Surround" or "7.1 Speakers"
   - **Audio Output**: Set to "Speakers" not "Headphones"
 
-In fact, failing to configure the game, and using two surround emulations at the same time, unlocks a secret Knight Mode™: an authentic feeling of a steel bucket on your head.  
+Failing to configure the game properly — and using two surround emulations at once — unlocks a secret Knight Mode™: the authentic feeling of a steel bucket on your head.  
 
 #### Media Players:
-- Configure to output multi-channel audio (not downmixed to stereo). Avoid upmixing stereo to 7.1 too as it may produce excessive echo. Stereo content should remain stereo, and you will hear it as if you are listening to 2.1 speakers. 
+- Configure to output multi-channel audio (not downmixed to stereo). Also avoid upmixing stereo to 7.1, as it may produce excessive echo. Stereo content should remain stereo, and you will hear it as if you are listening to 2.1 speakers. 
 
 #### System-Wide:
 - Ensure your system audio settings are configured for 7.1 output when using the virtual sink
@@ -208,7 +208,7 @@ Expect to spend some time trying different IR files until you find one that suit
 If the application shows no icon or a generic icon, this is a basic limitation of Wayland. For the icon to display, the application needs to be installed — meaning its `.desktop` entry needs to be added to the start menu. Most Linux distributions have their own specific way to install and integrate AppImages.
 
 ### Application Errors
-- **"Can not find wave files"**: Irate Goose does not automatically search any directory for WAV files. Set the WAV folder on the **Options tab** before creating the device.
+- **"Cannot find wave files"**: Irate Goose does not automatically scan for WAV files. Set the WAV folder on the **Options tab** before creating the device.
 - **Permission errors**: Run with appropriate permissions for writing to `~/.config`
 - **PipeWire not running**: Ensure PipeWire is installed and running on your system
 
@@ -267,7 +267,7 @@ If you're packaging Irate Goose for distribution, note these dependencies:
 
 ## Building from Source
 
-If you prefer to build from source instead of using the pre-built binary:
+If you prefer to build from source instead of using the pre-built AppImage:
 
 ```bash
 # Clone the repository
@@ -282,7 +282,7 @@ cd ..
 # Build with Cargo
 cargo build --release
 
-# The binary will be at target/release/IrateGoose
+# The binary will be at target/release/irate_goose
 ```
 
 ## License
