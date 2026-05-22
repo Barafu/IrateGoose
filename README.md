@@ -33,10 +33,10 @@ Irate Goose is a graphical application that configures PipeWire to create a virt
 - **Stereo headphones** (any quality will work, but better headphones provide better results)
 
 ### Step 1: Download Irate Goose
-Download the latest binary from the [Releases page](https://github.com/Barafu/IrateGoose/releases)
+Download the latest AppImage binary from the [Releases page](https://github.com/Barafu/IrateGoose/releases)
 
 ### Step 2: Obtain IR Files
-Irate Goose requires impulse response files in WAV format compatible with HeSuVi. You have several options:
+Irate Goose requires impulse response files in WAV format compatible with HeSuVi. You have several options to get them:
 
 1. **Download full collection**: Get IR files from the Internet:
 
@@ -57,7 +57,7 @@ Irate Goose requires impulse response files in WAV format compatible with HeSuVi
    ./IrateGoose-*.AppImage
    ```
 
-AppImages can be run directly without installation. For adding it to your application menu, your Linux distribution likely has its own AppImage integration tool, or you can use **GearLevel** (available as a Flatpak).
+AppImages can be run directly without installation. To install it on your system, your Linux distribution likely has its own AppImage manager tool, or you can use **GearLevel** (available as a Flatpak).
 
 ### Application icon:
 
