@@ -70,6 +70,8 @@ pub struct AppGUI<'a> {
 
     // Cache for rendering markdown help content
     help_cache: CommonMarkCache,
+    // Whether to scroll help tab to top on next render
+    help_scroll_to_top: bool,
 
     // === Modal state ===
     // Whether modal dialog is open
@@ -145,6 +147,7 @@ impl<'a> AppGUI<'a> {
             sinks,
             selected_sink_index,
             help_cache: CommonMarkCache::default(),
+            help_scroll_to_top: true,
         };
 
         if let Err(e) = result.safe_rescan() {
@@ -479,6 +482,11 @@ impl<'a> AppGUI<'a> {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
+                if self.help_scroll_to_top {
+                    ui.scroll_to_cursor(Some(egui::Align::TOP));
+                    self.help_scroll_to_top = false;
+                }
+
                 // About section
                 ui.heading("About");
                 ui.label(format!("Irate Goose v{}", VERSION));

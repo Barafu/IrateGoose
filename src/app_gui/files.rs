@@ -246,7 +246,8 @@ impl<'a> AppGUI<'a> {
             ui.label("");
             ui.label("Irate Goose needs IR (Impulse Response) files to create a virtual surround sound effect.");
             ui.label("No IR files were found in the selected directory.");
-            ui.label("Some ways to obtain IR files are described on the project page:");
+            ui.label("Look at the Help tab for ways to obtain IR files.");
+            ui.label("");
             ui.hyperlink_to(" Irate Goose GitHub", "https://github.com/Barafu/IrateGoose");
         } else if self.get_filtered_wav_files().len() == 0 {
             ui.label("");
