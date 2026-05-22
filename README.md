@@ -7,8 +7,8 @@ Irate Goose is a graphical application that configures PipeWire to create a virt
 ## Table of Contents
 
 **User Guide**
-- [How It Works](#how-it-works)
 - [Installation](#installation)
+- [How It Works](#how-it-works)
 - [Configuration](#configuration)
 - [Integration with EasyEffects](#integration-with-easyeffects)
 - [Finding the Right IR File](#finding-the-right-ir-file)
@@ -24,22 +24,6 @@ Irate Goose is a graphical application that configures PipeWire to create a virt
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 - [Support and Feedback](#support-and-feedback)
-
-## How It Works
-
-Irate Goose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
-
-### HRTF (Head-Related Transfer Function)
-HRTF is a mathematical model that describes how sound reaches your ears from different directions in space. It accounts for the shape of your head, ears, and torso, which affect how you perceive sound direction. By applying HRTF processing to surround sound, you can experience convincing 3D audio through headphones.
-
-### Convolver
-A convolver is a digital signal processing component that applies an impulse response to an audio signal. In this context, it takes the 7.1 channel audio and "convolves" it with HRTF data to create binaural output that mimics how sound would arrive at your ears from different directions.
-
-### Impulse Response (IR) File
-An impulse response file (typically a WAV file) contains the acoustic "fingerprint" of how a sound system (or in this case, a human hearing system) responds to an impulse. IR files contain measurements of how sound from each direction reaches both ears. Irate Goose uses multi-channel WAV files where each channel corresponds to a different speaker position.
-
-### Compatibility with HeSuVi
-Irate Goose uses the same mathematical processing and the same IR file format as the popular **HeSuVi** (Headphone Surround Virtualization) software. If you're familiar with HeSuVi, you'll find that Irate Goose produces similar audio quality and uses the same IR files. This means you can use your existing HeSuVi IR collection with Irate Goose.
 
 ## Installation
 
@@ -64,55 +48,37 @@ Irate Goose requires impulse response files in WAV format compatible with HeSuVi
 
 3. **Use your own**: Any multi-channel WAV file in HeSuVi format (14 channels for 7.1 processing) will work.
 
-### Step 3: Installation Options
+### Step 3: Use the AppImage
 
-Irate Goose offers two installation approaches:
-
-#### Option A: Try Out the Application
-If you want to try Irate Goose without installing it permanently:
-1. Download the binary to any location
-2. Start the application
-3. On the **Options tab**, select the folder containing your WAV files
-
-#### Option B: Install for Regular Use
-For permanent installation:
-1. Move the binary to a directory on your PATH (recommended: `~/.local/bin/`)
-2. Run the installation command to create a system menu entry:
+1. Download the AppImage from the [Releases page](https://github.com/Barafu/IrateGoose/releases)
+2. Make it executable and run it:
    ```bash
-   irate_goose --install
+   chmod +x IrateGoose-*.AppImage
+   ./IrateGoose-*.AppImage
    ```
-   This creates a `.desktop` file in the appropriate location for your desktop environment.
 
-3. To uninstall (removes only the menu entry):
-   ```bash
-   irate_goose --uninstall
-   ```
-   Note: The binary and WAV files need to be removed manually if desired.
+AppImages can be run directly without installation. For adding it to your application menu, your Linux distribution likely has its own AppImage integration tool, or you can use **GearLevel** (available as a Flatpak).
 
 ### Application icon:
 
 <img width="512" height="512" alt="irate_goose_logo" src="https://github.com/user-attachments/assets/d3019976-6a3d-46cd-a726-30da7dc8a80a" style="width:30%; height:auto;"/>
 
 
-### Command Line Options
-Irate Goose supports several command-line options:
+## How It Works
 
-- **Set WAV folder temporarily**: Specify the WAV folder path as an argument:
-  ```bash
-  irate_goose /path/to/your/wav/files
-  ```
-  This sets the WAV folder for this run only.
+Irate Goose creates a virtual PipeWire sink that processes 7.1 channel audio through a **convolver** using **HRTF impulse response (IR) files**. Here's what these terms mean:
 
-- **Install/uninstall menu entry**:
-  ```bash
-  irate_goose --install    # Create system menu entry
-  irate_goose --uninstall  # Remove system menu entry
-  ```
+### HRTF (Head-Related Transfer Function)
+HRTF is a mathematical model that describes how sound reaches your ears from different directions in space. It accounts for the shape of your head, ears, and torso, which affect how you perceive sound direction. By applying HRTF processing to surround sound, you can experience convincing 3D audio through headphones.
 
-- **Help**: Display help information:
-  ```bash
-  irate_goose --help
-  ```
+### Convolver
+A convolver is a digital signal processing component that applies an impulse response to an audio signal. In this context, it takes the 7.1 channel audio and "convolves" it with HRTF data to create binaural output that mimics how sound would arrive at your ears from different directions.
+
+### Impulse Response (IR) File
+An impulse response file (typically a WAV file) contains the acoustic "fingerprint" of how a sound system (or in this case, a human hearing system) responds to an impulse. IR files contain measurements of how sound from each direction reaches both ears. Irate Goose uses multi-channel WAV files where each channel corresponds to a different speaker position.
+
+### Compatibility with HeSuVi
+Irate Goose uses the same mathematical processing and the same IR file format as the popular **HeSuVi** (Headphone Surround Virtualization) software. If you're familiar with HeSuVi, you'll find that Irate Goose produces similar audio quality and uses the same IR files. This means you can use your existing HeSuVi IR collection with Irate Goose.
 
 ## Configuration
 
@@ -239,9 +205,7 @@ Expect to spend some time trying different IR files until you find one that suit
 - Ensure your headphones are properly connected
 
 ### Application Errors
-- **"Can not find wave files"**: Irate Goose does not automatically search its own directory for WAV files. You need to:
-  1. Set the WAV folder on the **Options tab** in the application, OR
-  2. Specify the folder path as a command-line argument when launching: `irate_goose /path/to/wav/files`
+- **"Can not find wave files"**: Irate Goose does not automatically search any directory for WAV files. Set the WAV folder on the **Options tab** before creating the device.
 - **Permission errors**: Run with appropriate permissions for writing to `~/.config`
 - **PipeWire not running**: Ensure PipeWire is installed and running on your system
 
@@ -286,7 +250,7 @@ If you're packaging Irate Goose for distribution, note these dependencies:
 - **zstd**: Required for decompressing embedded data
 - **Rust-winit requirements**: Standard windowing system dependencies (X11/Wayland libraries)
 - **xdg-portals**: Used for opening directory selection dialogs
-- **xdg-utils**: Required for creating system menu entries via `--install`/`--uninstall` commands
+- **libdbus**: For querying desktop settings. 
 
 ### Build Dependencies
 - **Rust toolchain** (latest stable)
@@ -304,7 +268,7 @@ If you prefer to build from source instead of using the pre-built binary:
 
 ```bash
 # Clone the repository
-git clone https://github.com/???/IrateGoose.git
+git clone https://github.com/Barafu/IrateGoose.git
 cd IrateGoose
 
 # compress the data
