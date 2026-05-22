@@ -204,6 +204,9 @@ Expect to spend some time trying different IR files until you find one that suit
 - Try a different IR file (some may be incompatible or damaged)
 - Ensure your headphones are properly connected
 
+### Application Icon Not Showing in Wayland
+If the application shows no icon or a generic icon, this is a basic limitation of Wayland. For the icon to display, the application needs to be installed — meaning its `.desktop` entry needs to be added to the start menu. Most Linux distributions have their own specific way to install and integrate AppImages.
+
 ### Application Errors
 - **"Can not find wave files"**: Irate Goose does not automatically search any directory for WAV files. Set the WAV folder on the **Options tab** before creating the device.
 - **Permission errors**: Run with appropriate permissions for writing to `~/.config`
