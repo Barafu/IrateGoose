@@ -192,19 +192,19 @@ Expect to spend some time trying different IR files until you find one that suit
 
 ## Troubleshooting
 
-### Virtual Sound Card Not Appearing
+### Virtual sound card not appearing
 - **KDE Plasma**: Enable "Show virtual devices" in sound settings
 - **Restart audio**: Run `systemctl --user restart pipewire pipewire-pulse`
 - **Check configuration**: Ensure Irate Goose successfully wrote the config (look for `~/.config/pipewire/pipewire.conf.d/sink-virtual-surround-7.1-irategoose.conf`)
 
-### No Sound or Distorted Audio
+### No sound or distorted audio
 - Verify you've selected your virtual sound card as output device (default name: "Virtual Surround Sink", but you can customize it on the Options tab)
 - **Check Output Device selection**: If you selected a specific output device in the Options tab, ensure that device is connected and active. Try switching to "Auto" to let PipeWire decide.
 - Check that your application is outputting 7.1 audio, not stereo
 - Try a different IR file (some may be incompatible or damaged)
 - Ensure your headphones are properly connected
 
-### Application Icon Not Showing in Wayland
+### Application icon not showing in Wayland
 If the application shows no icon or a generic icon, this is a basic limitation of Wayland. For the icon to display, the application needs to be installed — meaning its `.desktop` entry needs to be added to the start menu. Most Linux distributions have their own specific way to install and integrate AppImages.
 
 ### Application Errors
