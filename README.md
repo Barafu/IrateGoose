@@ -1,3 +1,5 @@
+
+
 # Irate Goose - Virtual Surround Sound for PipeWire
 
 Irate Goose is a graphical application that configures PipeWire to create a virtual sound card for headphones. It transforms 7.1 surround sound into binaural audio using Head-Related Transfer Function (HRTF) technology, delivering immersive 3D audio through regular stereo headphones.
@@ -243,7 +245,7 @@ Irate Goose creates a PipeWire filter chain that:
 - Accepts 8-channel input (7.1 surround: FL, FR, FC, LFE, RL, RR, SL, SR)
 - Applies convolution with the selected HRTF IR file
 - Mixes down to 2-channel binaural output
-- Creates both input (`effect_input.virtual-surround-7.1-hesuvi`) and output (`effect_output.virtual-surround-7.1-hesuvi`) nodes
+- Creates both input (`effect_input.virtual-surround-7.1-irategoose`) and output (`effect_output.virtual-surround-7.1-irategoose`) nodes
 
 ## For Packaging
 
@@ -301,5 +303,4 @@ The application is developed with the use of DeepSeek LLM.
 
 Found a bug? Have a feature request? Please open an issue on the GitHub repository.
 
-So, why Irate Goose?  **I**mpulse **R**esponse, IR. I mean, have you ever seen a goose? They have teeth! On the tongue! 
-
+So, why Irate Goose?  **I**mpulse **R**esponse, IR. I mean, have you ever seen a goose? They have teeth! On the tongue!
