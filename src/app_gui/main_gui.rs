@@ -1,17 +1,15 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use rfd::FileDialog;
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::app_gui::theme::{DetectedTheme, detect_system_theme};
+use crate::app_gui::theme::resolve_theme;
 use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
-use crate::settings::{AppSettings, DEFAULT_SERVICE_RESTART_COMMAND, DEFAULT_VIRTUAL_DEVICE_NAME};
+use crate::settings::AppSettings;
 use crate::wav_file_index::WavFileIndex;
 use egui_commonmark::{CommonMarkCache, commonmark_str};
-use log::{error, info, warn};
+use log::{error, warn};
 use std::sync::{Arc, Mutex};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -56,19 +54,19 @@ pub struct AppGUI<'a> {
     // Directory path displayed in edit field in options tab
     pub(crate) directory_text: String,
     // Virtual device name displayed in edit field in options tab
-    device_name_text: String,
+    pub(crate) device_name_text: String,
     // Service restart command displayed in edit field in options tab
-    restart_command_text: String,
+    pub(crate) restart_command_text: String,
     // UI theme preference (local copy for radio buttons)
-    theme_preference: eframe::egui::ThemePreference,
+    pub(crate) theme_preference: eframe::egui::ThemePreference,
     // Row index to scroll to (None if no scroll requested)
     pub(crate) scroll_to_row: Option<usize>,
 
     // === Output device selection ===
     // List of audio sinks (each a HashMap of properties)
-    sinks: Vec<std::collections::HashMap<String, String>>,
+    pub(crate) sinks: Vec<std::collections::HashMap<String, String>>,
     // Selected index in combobox (0 = Auto, 1..len = sink index)
-    selected_sink_index: usize,
+    pub(crate) selected_sink_index: usize,
 
     // Cache for rendering markdown help content
     help_cache: CommonMarkCache,
@@ -176,30 +174,10 @@ impl<'a> AppGUI<'a> {
             .position(|s| s.get("node.name") == Some(node_name))
     }
 
-    /// Generate display text for a sink (two lines).
-    /// First line: node.nick if present, else node.name.
-    /// Second line: node.name.
-    fn sink_display_text(sink: &std::collections::HashMap<String, String>) -> String {
-        let node_name = sink
-            .get("node.name")
-            .filter(|s| !s.is_empty())
-            .map(String::as_str)
-            .unwrap_or("UNKNOWN DEVICE");
-        let first_line = sink
-            .get("node.nick")
-            .map(String::as_str)
-            .unwrap_or(node_name);
-        if first_line == node_name {
-            return format!("{}", node_name);
-        } else {
-            return format!("{}\n{}", first_line, node_name);
-        }
-    }
-
     /// Refresh the list of sinks from ConfigManager.
     /// If the currently selected sink (by node.name) is still present in the new list,
     /// keep it selected; otherwise reset to Auto.
-    fn refresh_sinks(&mut self) {
+    pub(crate) fn refresh_sinks(&mut self) {
         let old_selection = self.settings.borrow().output_device.clone();
         let new_sinks = match self.config_manager.list_audio_devices() {
             Ok(devices) => ConfigManager::filter_audio_sinks(&devices),
@@ -224,17 +202,6 @@ impl<'a> AppGUI<'a> {
         if old_selection != new_selection {
             self.settings.borrow_mut().output_device = new_selection.clone();
             self.write_settings();
-        }
-    }
-
-    /// Generate display text for the currently selected sink (including Auto).
-    fn selected_sink_display_text(&self) -> String {
-        if self.selected_sink_index == 0 {
-            "Auto\nLet Pipewire decide".to_string()
-        } else if let Some(sink) = self.sinks.get(self.selected_sink_index - 1) {
-            Self::sink_display_text(sink)
-        } else {
-            "Invalid".to_string()
         }
     }
 
@@ -317,199 +284,6 @@ impl<'a> AppGUI<'a> {
         self.all_wav_index.get_by_checksum(checksum)
     }
 
-    /// Renders the options tab content inside a scrollable area.
-    /// The scroll area always fills the available space so the fixed footer
-    /// panel below it stays at a constant position; the scrollbar only
-    /// appears when the content overflows.
-    fn render_options(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-        ui.heading("IR files Directory");
-        ui.label("Set the directory containing IR files for surround sound:");
-
-        ui.horizontal(|ui| {
-            ui.label("Directory:");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to IR files"),
-            );
-            if ui.button("Select").clicked() {
-                // Create file dialog for directory selection
-                let mut dialog = FileDialog::new().set_title("Select IR Files Directory");
-
-                // Try to set starting directory from current directory_text if it's a valid path
-                let current_dir = self.directory_text.trim();
-                if !current_dir.is_empty() {
-                    let path = PathBuf::from(current_dir);
-                    if path.exists() && path.is_dir() {
-                        dialog = dialog.set_directory(path);
-                    }
-                }
-
-                // Show directory picker dialog
-                if let Some(selected_folder) = dialog.pick_folder() {
-                    // Update directory text field with selected path
-                    self.directory_text = selected_folder.to_string_lossy().to_string();
-                    // Automatically trigger rescan for the newly selected directory
-                    self.on_rescan_click();
-                }
-            }
-            let rescan_enabled = !self.directory_text.trim().is_empty();
-            let rescan_button = ui.add_enabled(rescan_enabled, egui::Button::new("Rescan"));
-            if rescan_button.clicked() {
-                self.on_rescan_click();
-            }
-        });
-
-        ui.separator();
-
-        ui.heading("Virtual Device Name");
-        ui.label("Set the name of the virtual audio device that will appear in your system audio settings:");
-
-        // Display currently configured device name
-        let current_device_name = self.settings.borrow().virtual_device_name.clone();
-        ui.label(format!("Currently configured: {}", current_device_name));
-
-        ui.horizontal(|ui| {
-            ui.label("Device name:");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.device_name_text)
-                    .hint_text("Virtual device name"),
-            );
-
-            let default_value = DEFAULT_VIRTUAL_DEVICE_NAME;
-            let trimmed_text = self.device_name_text.trim().to_string();
-
-            // Default only fills the text field, so it is disabled when the
-            // field already contains the default value.
-            let default_button_enabled = trimmed_text != default_value;
-            let default_button =
-                ui.add_enabled(default_button_enabled, egui::Button::new("Default"));
-            if default_button.clicked() {
-                self.on_default_device_name_click();
-            }
-        });
-
-        ui.separator();
-
-        ui.heading("Output Device");
-        ui.label("Select the audio sink where the virtual surround device will output sound:");
-        ui.horizontal_top(|ui| {
-            ui.label("Output device:");
-            // Combobox for sink selection
-            let total_items = self.sinks.len() + 1; // +1 for Auto
-            let response = egui::ComboBox::from_label("")
-                .selected_text(self.selected_sink_display_text())
-                .show_index(ui, &mut self.selected_sink_index, total_items, |i| {
-                    if i == 0 {
-                        "Auto\nLet Pipewire decide".to_string()
-                    } else {
-                        let sink = &self.sinks[i - 1];
-                        Self::sink_display_text(sink)
-                    }
-                });
-            // Update settings if selection changed
-            if response.changed() {
-                let new_selection = if self.selected_sink_index == 0 {
-                    None
-                } else {
-                    self.sinks
-                        .get(self.selected_sink_index - 1)
-                        .and_then(|s| s.get("node.name").cloned())
-                };
-                self.settings.borrow_mut().output_device = new_selection;
-                self.write_settings();
-            }
-            // Reload button
-            if ui.button("Reload").clicked() {
-                self.refresh_sinks();
-            }
-        });
-
-        ui.separator();
-
-        ui.heading("Service Restart Command");
-        ui.label(
-            "Command used to restart the audio services when the device is created or removed:",
-        );
-
-        // Display currently configured restart command; empty means no restart.
-        let current_command = self.settings.borrow().service_restart_command.clone();
-        if current_command.is_empty() {
-            ui.label("Currently configured: (none, services will not be restarted)");
-        } else {
-            ui.label(format!("Currently configured: {}", current_command));
-        }
-
-        ui.horizontal(|ui| {
-            ui.label("Command:");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.restart_command_text)
-                    .hint_text("Program and its arguments separated by spaces"),
-            );
-
-
-            // Restore the default systemd command into the text field without applying it.
-            // Disabled when the field already contains exactly the default command.
-            let at_default = self.restart_command_text == DEFAULT_SERVICE_RESTART_COMMAND;
-            let use_systemd_button = ui.add_enabled(!at_default, egui::Button::new("Use systemd"));
-            if use_systemd_button.clicked() {
-                self.restart_command_text = DEFAULT_SERVICE_RESTART_COMMAND.to_string();
-            }
-        });
-
-        ui.separator();
-
-        ui.heading("UI Theme");
-        ui.label("Select the application visual theme:");
-        let old_preference = self.theme_preference;
-        ui.horizontal(|ui| {
-            ui.selectable_value(
-                &mut self.theme_preference,
-                egui::ThemePreference::Light,
-                "🌞 Light",
-            );
-            ui.selectable_value(
-                &mut self.theme_preference,
-                egui::ThemePreference::Dark,
-                "🌙 Dark",
-            );
-            ui.selectable_value(
-                &mut self.theme_preference,
-                egui::ThemePreference::System,
-                "🌟 System",
-            );
-        });
-        if self.theme_preference != old_preference {
-            // Update settings
-            self.settings.borrow_mut().theme_preference = self.theme_preference;
-            self.write_settings();
-            // Resolve and apply immediately
-            let resolved = resolve_theme(self.theme_preference);
-            ui.ctx().set_theme(resolved);
-        }
-
-        if self.settings.borrow().dev_mode {
-            // Developer-only controls
-            ui.separator();
-
-            // Allow running the real restart command even in dev mode.
-            // Runtime-only flag, not persisted to settings.
-            let mut apply_restart = self.settings.borrow().dev_apply_restart_command;
-            if ui
-                .checkbox(&mut apply_restart, "Apply restart command")
-                .changed()
-            {
-                self.settings.borrow_mut().dev_apply_restart_command = apply_restart;
-            }
-
-            if ui.button("Show modal test message").clicked() {
-                self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
-            }
-        }
-            });
-    }
-
     /// Renders the log tab content.
     fn render_log(&mut self, ui: &mut egui::Ui) {
         // Update cached log text from buffer
@@ -560,47 +334,6 @@ impl<'a> AppGUI<'a> {
             });
     }
 
-    /// Validates all editable Options values before they are applied.
-    /// Returns false when any value is invalid. Currently this only requires
-    /// the device name to be non-empty; the restart command may be empty,
-    /// which means "never restart the services".
-    fn validate_options(&self) -> bool {
-        !self.device_name_text.trim().is_empty()
-    }
-
-    /// Handles the single "Apply" button click in the Options footer.
-    /// Collects all option text fields and writes them to the settings,
-    /// then saves the settings to disk once.
-    ///
-    /// Does nothing when the fields are invalid ([`Self::validate_options`]).
-    fn on_apply_options_click(&mut self) {
-        if !self.validate_options() {
-            error!("Options tab is in invalid state!");
-            return;
-        }
-
-        let device_name = self.device_name_text.trim().to_string();
-        let restart_command = self.restart_command_text.trim().to_string();
-
-        // Write every collected field, then save once.
-        {
-            let mut settings = self.settings.borrow_mut();
-            settings.virtual_device_name = device_name.clone();
-            settings.service_restart_command = restart_command.clone();
-        }
-
-        self.write_settings();
-
-        info!("Settings changed");
-    }
-
-    /// Handles the "Default" button click for virtual device name.
-    /// Only fills the text field with the default value; the change is
-    /// saved when Apply is pressed.
-    fn on_default_device_name_click(&mut self) {
-        self.device_name_text = DEFAULT_VIRTUAL_DEVICE_NAME.to_string();
-    }
-
     /// Write current settings to disk.
     pub(crate) fn write_settings(&mut self) {
         let save_result = self.settings.borrow().save();
@@ -619,24 +352,8 @@ impl<'a> AppGUI<'a> {
     }
 }
 
-/// Resolve a `ThemePreference` to a concrete theme.
-///
-/// For `System` the preference is obtained via D-Bus from the Freedesktop portal.
-/// Falls back to dark when detection fails.
-fn resolve_theme(preference: egui::ThemePreference) -> egui::ThemePreference {
-    match preference {
-        egui::ThemePreference::Dark => egui::ThemePreference::Dark,
-        egui::ThemePreference::Light => egui::ThemePreference::Light,
-        egui::ThemePreference::System => match detect_system_theme() {
-            Some(DetectedTheme::Dark) => egui::ThemePreference::Dark,
-            Some(DetectedTheme::Light) => egui::ThemePreference::Light,
-            None => egui::ThemePreference::Dark,
-        },
-    }
-}
-
 impl<'a> eframe::App for AppGUI<'a> {
-    /// Build the application UI: status bar, optional Options footer, and the central panel.
+    /// Build the application UI: status bar and the central panel.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::Panel::bottom("status_panel").show(ui, |ui| {
             // Add status bar at the bottom
@@ -666,43 +383,6 @@ impl<'a> eframe::App for AppGUI<'a> {
                 ui.label(last_log);
             });
         });
-        // Fixed footer panel with the Apply buttons for the Options tab.
-        // Shown after the status panel so it stacks directly above it;
-        // shown before the central panel so it always keeps its space.
-        if self.selected_tab == Tab::Options {
-            // Compute the validity of all Options values before opening the
-            // panel closure; Apply is enabled by validation.
-            let options_valid = self.validate_options();
-
-            egui::Panel::bottom("options_footer")
-                .show_separator_line(false)
-                .show(ui, |ui| {
-                    // Center the Apply button horizontally with a centered top-down
-                    // layout. `horizontal_centered` cannot be used here: it allocates
-                    // its child against all remaining space, which would stretch this
-                    // bottom panel to fill the whole window.
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        // Some vertical margin above and below the button.
-                        ui.add_space(8.0);
-                        // Match the size of the "Create device" button.
-                        // The button is added directly to this centered layout;
-                        // wrapping it in `ui.horizontal` would stretch to the full
-                        // panel width and defeat the centering.
-                        ui.style_mut().spacing.button_padding = (16.0, 12.0).into();
-                        if ui
-                            .add_enabled(
-                                options_valid,
-                                egui::Button::new(egui::RichText::new("✔️Apply").strong()),
-                            )
-                            .clicked()
-                        {
-                            self.on_apply_options_click();
-                        }
-                        ui.add_space(4.0);
-                    });
-                });
-        }
-
         egui::CentralPanel::default().show(ui, |ui| {
             ui.heading("Create Virtual Device");
 

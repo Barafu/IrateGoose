@@ -1,5 +1,6 @@
 use dbus::arg::RefArg;
 use dbus::blocking::{BlockingSender, Connection};
+use eframe::egui;
 
 /// Represents a concrete system color scheme preference detected via D-Bus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,5 +43,21 @@ pub fn detect_system_theme() -> Option<DetectedTheme> {
         1 => Some(DetectedTheme::Dark),
         2 => Some(DetectedTheme::Light),
         _ => None,
+    }
+}
+
+/// Resolve a `ThemePreference` to a concrete theme.
+///
+/// For `System` the preference is obtained via D-Bus from the Freedesktop portal.
+/// Falls back to dark when detection fails.
+pub fn resolve_theme(preference: egui::ThemePreference) -> egui::ThemePreference {
+    match preference {
+        egui::ThemePreference::Dark => egui::ThemePreference::Dark,
+        egui::ThemePreference::Light => egui::ThemePreference::Light,
+        egui::ThemePreference::System => match detect_system_theme() {
+            Some(DetectedTheme::Dark) => egui::ThemePreference::Dark,
+            Some(DetectedTheme::Light) => egui::ThemePreference::Light,
+            None => egui::ThemePreference::Dark,
+        },
     }
 }
