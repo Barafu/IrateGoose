@@ -3,7 +3,7 @@
 ## Project Overview
 
 - Application written in Rust.
-- Uses eframe/egui v0.33.3 for building GUI. 
+- Uses eframe/egui for building GUI. For versions of crates check Cargo.lock
 - Platform: Linux only. 
 
 ## Terminology
@@ -15,7 +15,7 @@ These are two separate entities; keep the distinction in code, comments, logs, a
 
 ## Tools to use
 
-- `cargo check` to verify new code for errors
+- `cargo check` without extra arguments to verify the new code for errors
 - `cargo test` to run tests
 - `cargo add` to add new dependency
 - Never run `cargo build --release`
