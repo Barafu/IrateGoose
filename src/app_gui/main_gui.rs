@@ -117,6 +117,8 @@ impl<'a> AppGUI<'a> {
         let resolved = resolve_theme(theme_preference);
         cc.egui_ctx.set_theme(resolved);
 
+        AppGUI::adjust_font_size(&cc.egui_ctx, 1.1);
+
         // Load sinks and compute selected index
         let sinks = match config_manager.list_audio_devices() {
             Ok(devices) => ConfigManager::filter_audio_sinks(&devices),
@@ -605,6 +607,15 @@ impl<'a> AppGUI<'a> {
         if let Err(e) = save_result {
             self.show_modal("Settings Error", &format!("Failed to save settings: {}", e));
         }
+    }
+
+    /// Fixes font sizes
+    fn adjust_font_size(ctx: &egui::Context, factor: f32) {
+        ctx.all_styles_mut(|style| {
+            for font_id in style.text_styles.values_mut() {
+                font_id.size = (font_id.size * factor).max(1.0);
+            }
+        });
     }
 }
 

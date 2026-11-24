@@ -20,7 +20,7 @@ egui_extras = "0.37"
 image = "0.25.9"
 toml = "1.2.2"
 serde = { version = "1.0.228", features = ["derive"] }
-egui = { version = "0.37", features = ["serde"] }
+egui = { version = "0.37", features = ["serde", "monochrome_emoji_fonts"] }
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }
 rfd = { version = "0.17.2", features = ["xdg-portal"] }
 log4rs = "1.4.0"
