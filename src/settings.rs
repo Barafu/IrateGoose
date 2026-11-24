@@ -6,6 +6,10 @@ use std::path::PathBuf;
 /// Default virtual device name used when no custom name is provided.
 pub const DEFAULT_VIRTUAL_DEVICE_NAME: &str = "Virtual Surround Sink";
 
+/// Default command used to restart the audio services after applying configuration changes.
+pub const DEFAULT_SERVICE_RESTART_COMMAND: &str =
+    "systemctl --user restart wireplumber pipewire pipewire-pulse";
+
 /// Application settings for IrateGoose (NOT PipeWire settings).
 /// These settings control the application behavior, such as WAV directory
 /// preferences and virtual device naming, and are stored separately from
@@ -25,9 +29,18 @@ pub struct AppSettings {
     /// Selected output sink (audio device) node.name; None = Auto (let PipeWire decide)
     pub output_device: Option<String>,
 
+    /// Command used to restart the audio services after creating or removing the virtual device.
+    /// The first whitespace-separated token is the program, the rest are its arguments.
+    pub service_restart_command: String,
+
     /// Development mode flag (runtime only, not persisted)
     #[serde(skip)]
     pub dev_mode: bool,
+
+    /// When true, the service restart command is executed even in dev mode.
+    /// Controlled by a dev-only checkbox in the UI (runtime only, not persisted).
+    #[serde(skip)]
+    pub dev_apply_restart_command: bool,
 }
 
 impl Default for AppSettings {
@@ -37,7 +50,9 @@ impl Default for AppSettings {
             virtual_device_name: DEFAULT_VIRTUAL_DEVICE_NAME.to_string(),
             theme_preference: ThemePreference::System,
             output_device: None,
+            service_restart_command: DEFAULT_SERVICE_RESTART_COMMAND.to_string(),
             dev_mode: false,
+            dev_apply_restart_command: false,
         }
     }
 }

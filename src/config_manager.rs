@@ -122,13 +122,34 @@ impl ConfigManager {
         }
 
         // Write the config file
-        if let Err(e) = fs::write(&self.config_path, config_text) {
+        if let Err(e) = fs::write(&self.config_path, &config_text) {
             // If writing fails, delete any partially written config file.
             let _ = fs::remove_file(&self.config_path);
             return Err(e).with_context(|| {
                 format!("Failed to write config to {}", self.config_path.display())
             });
         }
+
+        // Read the file back to make sure it was actually saved before any
+        // attempt to restart services.
+        let saved_content = fs::read_to_string(&self.config_path).with_context(|| {
+            format!(
+                "Failed to verify config after writing {}",
+                self.config_path.display()
+            )
+        })?;
+        if saved_content != config_text {
+            // The file on disk is not what we intended; discard it.
+            let _ = fs::remove_file(&self.config_path);
+            bail!(
+                "Config verification failed: content mismatch after writing to {}",
+                self.config_path.display()
+            );
+        }
+
+        // Log the successful save before any restart messages, so that if the
+        // restart has a problem, the error stays the last line in the log.
+        info!("Config written using {}", wavefile_path.display());
 
         // Restart services to apply the new config
         if let Err(e) = self.apply_config() {
@@ -149,7 +170,19 @@ impl ConfigManager {
                     self.config_path.display()
                 )
             })?;
+            // Make sure the file is really gone before any attempt to restart services.
+            if self.config_path.exists() {
+                bail!(
+                    "Config file still exists after deletion: {}",
+                    self.config_path.display()
+                );
+            }
         }
+
+        // Log the successful removal before any restart messages, so that if the
+        // restart has a problem, the error stays the last line in the log.
+        info!("Config deleted");
+
         // Restart services to apply the removal
         self.apply_config()?;
         Ok(())
@@ -224,32 +257,59 @@ impl ConfigManager {
         Err("No filename found in config".to_string())
     }
 
-    /// Restarts the PipeWire services to apply configuration changes.
-    /// Does nothing when in dev mode.
+    /// Restarts the PipeWire services to apply configuration changes, using the
+    /// command configured in settings. Does nothing when in dev mode, unless the
+    /// dev-only `dev_apply_restart_command` checkbox is enabled in the UI.
+    /// If the configured command is not found on the system, only a warning is
+    /// logged and the operation is treated as successful; the configuration file
+    /// stays in place and is picked up whenever the services restart next time.
+    /// An empty (or whitespace-only) command is never executed, dev mode or not;
+    /// it means the services are intentionally left alone.
     fn apply_config(&self) -> Result<()> {
-        // In dev mode, skip restarting services
-        if self.settings.borrow().dev_mode {
+        // In dev mode, skip restarting services unless explicitly overridden
+        let (dev_mode, apply_restart) = {
+            let settings = self.settings.borrow();
+            (settings.dev_mode, settings.dev_apply_restart_command)
+        };
+        if dev_mode && !apply_restart {
             return Ok(());
         }
 
-        let output = Command::new("systemctl")
-            .args([
-                "--user",
-                "restart",
-                "wireplumber",
-                "pipewire",
-                "pipewire-pulse",
-            ])
-            .output()
-            .with_context(|| "Failed to execute systemctl command")?;
+        let command = self.settings.borrow().service_restart_command.clone();
+        let mut parts = command.split_whitespace();
+        let Some(program) = parts.next() else {
+            warn!("Service restart command is empty, skipping service restart");
+            return Ok(());
+        };
+
+        let output = match Command::new(program).args(parts).output() {
+            Ok(output) => output,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // The command is not installed; this is not fatal. Log the full
+                // command on its own line (it can be long), then a short reason.
+                warn!("Using restart command {}", command);
+                warn!("Restart command not found. Restart Pipewire manually.");
+                return Ok(());
+            }
+            Err(e) => {
+                warn!("Using restart command {}", command);
+                return Err(e).with_context(|| "Failed to execute the service restart command");
+            }
+        };
 
         if output.status.success() {
             Ok(())
         } else {
             match output.status.code() {
                 Some(5) => Ok(()), // unit not loaded is fine
-                Some(code) => Err(anyhow!("systemctl failed with exit code {}", code)),
-                None => Err(anyhow!("systemctl terminated by signal")),
+                Some(code) => {
+                    warn!("Using restart command {}", command);
+                    Err(anyhow!("Restart command failed with exit code {}", code))
+                }
+                None => {
+                    warn!("Using restart command {}", command);
+                    Err(anyhow!("Restart command terminated by a signal"))
+                }
             }
         }
     }

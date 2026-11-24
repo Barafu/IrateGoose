@@ -8,7 +8,7 @@ use std::rc::Rc;
 use crate::app_gui::theme::{DetectedTheme, detect_system_theme};
 use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
-use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
+use crate::settings::{AppSettings, DEFAULT_SERVICE_RESTART_COMMAND, DEFAULT_VIRTUAL_DEVICE_NAME};
 use crate::wav_file_index::WavFileIndex;
 use egui_commonmark::{CommonMarkCache, commonmark_str};
 use log::{error, info, warn};
@@ -57,6 +57,8 @@ pub struct AppGUI<'a> {
     pub(crate) directory_text: String,
     // Virtual device name displayed in edit field in options tab
     device_name_text: String,
+    // Service restart command displayed in edit field in options tab
+    restart_command_text: String,
     // UI theme preference (local copy for radio buttons)
     theme_preference: eframe::egui::ThemePreference,
     // Row index to scroll to (None if no scroll requested)
@@ -107,6 +109,9 @@ impl<'a> AppGUI<'a> {
         // Initialize device_name_text from settings
         let device_name_text = settings.borrow().virtual_device_name.clone();
 
+        // Initialize restart_command_text from settings
+        let restart_command_text = settings.borrow().service_restart_command.clone();
+
         // Initialize theme preference from settings, resolving System via D-Bus
         let theme_preference = settings.borrow().theme_preference;
         let resolved = resolve_theme(theme_preference);
@@ -141,6 +146,7 @@ impl<'a> AppGUI<'a> {
             modal_message: String::new(),
             directory_text,
             device_name_text,
+            restart_command_text,
             theme_preference,
             filtered_wav_index: None,
             scroll_to_row: None,
@@ -253,13 +259,13 @@ impl<'a> AppGUI<'a> {
                 }
             };
             let absolute_path = selected_wav.path.as_path();
-            let display_path = absolute_path.display().to_string();
             match self.config_manager.write_config(absolute_path) {
                 Ok(()) => {
                     // Double-check that config was written correctly and extract the checksum from config
                     match self.config_manager.config_exists() {
                         Ok(Some(checksum)) => {
-                            info!("Config written using {}", display_path);
+                            // "Config written" is already logged by ConfigManager,
+                            // before any restart command messages.
                             self.config_installed = Some(checksum);
                         }
                         Ok(None) => {
@@ -286,7 +292,8 @@ impl<'a> AppGUI<'a> {
     fn on_delete_config_click(&mut self) {
         match self.config_manager.delete_config() {
             Ok(()) => {
-                info!("Config deleted");
+                // "Config deleted" is already logged by ConfigManager, before any
+                // restart command messages.
                 self.config_installed = None;
             }
             Err(e) => {
@@ -423,6 +430,49 @@ impl<'a> AppGUI<'a> {
 
         ui.separator();
 
+        ui.heading("Service Restart Command");
+        ui.label(
+            "Command used to restart the audio services when the device is created or removed:",
+        );
+
+        // Display currently configured restart command; empty means no restart.
+        let current_command = self.settings.borrow().service_restart_command.clone();
+        if current_command.is_empty() {
+            ui.label("Currently configured: (none, services will not be restarted)");
+        } else {
+            ui.label(format!("Currently configured: {}", current_command));
+        }
+
+        ui.horizontal(|ui| {
+            ui.label("Command:");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.restart_command_text)
+                    .hint_text("Program and its arguments separated by spaces"),
+            );
+
+            // Get current command inside the closure to avoid borrowing issues
+            let current_command = self.settings.borrow().service_restart_command.clone();
+
+            // Apply button should be disabled when text matches current settings.
+            // An empty command is allowed and disables the service restart.
+            let trimmed_text = self.restart_command_text.trim().to_string();
+            let apply_enabled = trimmed_text != current_command;
+            let apply_button = ui.add_enabled(apply_enabled, egui::Button::new("Apply"));
+            if apply_button.clicked() {
+                self.on_apply_restart_command_click(&trimmed_text);
+            }
+
+            // Restore the default systemd command into the text field without applying it.
+            // Disabled when the field already contains exactly the default command.
+            let at_default = self.restart_command_text == DEFAULT_SERVICE_RESTART_COMMAND;
+            let use_systemd_button = ui.add_enabled(!at_default, egui::Button::new("Use systemd"));
+            if use_systemd_button.clicked() {
+                self.restart_command_text = DEFAULT_SERVICE_RESTART_COMMAND.to_string();
+            }
+        });
+
+        ui.separator();
+
         ui.heading("UI Theme");
         ui.label("Select the application visual theme:");
         let old_preference = self.theme_preference;
@@ -453,8 +503,19 @@ impl<'a> AppGUI<'a> {
         }
 
         if self.settings.borrow().dev_mode {
-            // Developer-only buttons
+            // Developer-only controls
             ui.separator();
+
+            // Allow running the real restart command even in dev mode.
+            // Runtime-only flag, not persisted to settings.
+            let mut apply_restart = self.settings.borrow().dev_apply_restart_command;
+            if ui
+                .checkbox(&mut apply_restart, "Apply restart command")
+                .changed()
+            {
+                self.settings.borrow_mut().dev_apply_restart_command = apply_restart;
+            }
+
             if ui.button("Show modal test message").clicked() {
                 self.show_modal("Test Modal", "This is a test message to demonstrate the modal dialog functionality. Click 'Continue' to close this dialog.");
             }
@@ -526,6 +587,26 @@ impl<'a> AppGUI<'a> {
 
         // Show success message
         info!("Device name updated to '{}'", trimmed_text);
+    }
+
+    /// Handles the "Apply" button click for the service restart command.
+    /// An empty command is allowed and means services will never be restarted.
+    fn on_apply_restart_command_click(&mut self, trimmed_text: &str) {
+        // Update settings
+        {
+            let mut settings = self.settings.borrow_mut();
+            settings.service_restart_command = trimmed_text.to_string();
+        }
+
+        // Save settings
+        self.write_settings();
+
+        // Show success message
+        if trimmed_text.is_empty() {
+            info!("Service restart command cleared; services will not be restarted");
+        } else {
+            info!("Service restart command updated to '{}'", trimmed_text);
+        }
     }
 
     /// Handles the "Default" button click for virtual device name.
