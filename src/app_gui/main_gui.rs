@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::app_gui::theme::{detect_system_theme, DetectedTheme};
+use crate::app_gui::theme::{DetectedTheme, detect_system_theme};
 use crate::config_manager::ConfigManager;
 use crate::file_manager::{FileManager, WavFileData, WaveSampleRate};
 use crate::settings::{AppSettings, DEFAULT_VIRTUAL_DEVICE_NAME};
@@ -427,9 +427,21 @@ impl<'a> AppGUI<'a> {
         ui.label("Select the application visual theme:");
         let old_preference = self.theme_preference;
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::Light, "🌞 Light");
-            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::Dark, "🌙 Dark");
-            ui.selectable_value(&mut self.theme_preference, egui::ThemePreference::System, "🌟 System");
+            ui.selectable_value(
+                &mut self.theme_preference,
+                egui::ThemePreference::Light,
+                "🌞 Light",
+            );
+            ui.selectable_value(
+                &mut self.theme_preference,
+                egui::ThemePreference::Dark,
+                "🌙 Dark",
+            );
+            ui.selectable_value(
+                &mut self.theme_preference,
+                egui::ThemePreference::System,
+                "🌟 System",
+            );
         });
         if self.theme_preference != old_preference {
             // Update settings
@@ -554,11 +566,19 @@ impl<'a> eframe::App for AppGUI<'a> {
             // Add status bar at the bottom
             ui.horizontal(|ui| {
                 if self.settings.borrow().dev_mode {
-                    ui.label(
-                        egui::RichText::new("DEV")
-                            .color(egui::Color32::YELLOW)
-                            .strong(),
-                    );
+                    // Blink the DEV marker between yellow and black at 1 Hz.
+                    let time = ctx.input(|i| i.time);
+                    let blink_on = (time * 2.0).fract() < 0.5;
+                    let color = if blink_on {
+                        egui::Color32::YELLOW
+                    } else {
+                        egui::Color32::BLACK
+                    };
+
+                    ui.label(egui::RichText::new("DEV").color(color).strong());
+
+                    // egui idles between events; request a repaint so the blink keeps animating.
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
                 }
                 // Get the last line from the log buffer
                 let last_log = self
