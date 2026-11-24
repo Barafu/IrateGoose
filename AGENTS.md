@@ -6,6 +6,13 @@
 - Uses eframe/egui v0.33.3 for building GUI. 
 - Platform: Linux only. 
 
+## Terminology
+
+- **Settings**: the application settings managed by `src/settings.rs` (`AppSettings`), persisted in the application directory (e.g. `~/.config/irate_goose/settings.toml`). Never use "settings" to refer to PipeWire files.
+- **Config**: the PipeWire configuration required to create the virtual sound card, managed by `ConfigManager`. Never use "config" to refer to the application settings.
+
+These are two separate entities; keep the distinction in code, comments, logs, and conversation.
+
 ## Tools to use
 
 - `cargo check` to verify new code for errors
