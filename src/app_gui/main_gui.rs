@@ -164,7 +164,7 @@ impl<'a> AppGUI<'a> {
 
     /// Find sink index by node.name in the sinks list.
     /// Returns None if not found.
-    fn find_sink_index_by_name(
+    pub(crate) fn find_sink_index_by_name(
         sinks: &[std::collections::HashMap<String, String>],
         node_name: &Option<String>,
     ) -> Option<usize> {

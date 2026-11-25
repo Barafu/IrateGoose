@@ -15,6 +15,11 @@ const MIN_TEXT_EDIT_WIDTH: f32 = 240.0;
 /// edit, so the caret at the end of the text never sits on the very edge.
 const TEXT_EDIT_EXTRA_WIDTH: f32 = 24.0;
 
+/// Horizontal and vertical padding of the Apply button in the Options footer,
+/// used to match the size of the "Create device" button on the Files tab.
+const APPLY_BUTTON_PADDING_X: f32 = 16.0;
+const APPLY_BUTTON_PADDING_Y: f32 = 12.0;
+
 impl<'a> AppGUI<'a> {
     /// Generate display text for a sink (two lines).
     /// First line: node.nick if present, else node.name.
@@ -53,18 +58,18 @@ impl<'a> AppGUI<'a> {
     /// [`MIN_TEXT_EDIT_WIDTH`], which gives all fields the same minimum width.
     fn text_edit_width(ui: &mut egui::Ui, text: &str, hint: &str) -> f32 {
         let shown = if text.is_empty() { hint } else { text };
-        // Measure the text with the same font the text edit renders with
-        // (body style), allowing an unbounded wrap width so it stays on one
-        // line.
-        let style = ui.style();
-        let job = egui::text::LayoutJob::simple(
-            shown.to_string(),
-            style.text_styles[&egui::TextStyle::Body].clone(),
-            style.visuals.widgets.noninteractive.fg_stroke.color,
-            f32::INFINITY,
-        );
-        let content_width = ui.fonts_mut(|fonts| fonts.layout_job(job)).rect.width();
+        let content_width = Self::measure_text(ui, shown, egui::TextStyle::Body).width();
         (content_width + TEXT_EDIT_EXTRA_WIDTH).max(MIN_TEXT_EDIT_WIDTH)
+    }
+
+    /// Measures the rendered size of `text` in the given text style, using an
+    /// unbounded wrap width so the text is laid out on a single line.
+    fn measure_text(ui: &mut egui::Ui, text: &str, text_style: egui::TextStyle) -> egui::Rect {
+        let style = ui.style();
+        let font_id = style.text_styles[&text_style].clone();
+        let color = style.visuals.widgets.noninteractive.fg_stroke.color;
+        let job = egui::text::LayoutJob::simple(text.to_string(), font_id, color, f32::INFINITY);
+        ui.fonts_mut(|fonts| fonts.layout_job(job)).rect
     }
 
     /// Renders the options tab content inside a scrollable area, together with a
@@ -86,29 +91,77 @@ impl<'a> AppGUI<'a> {
         egui::Panel::bottom("options_footer")
             .show_separator_line(false)
             .show(ui, |ui| {
-                // Center the Apply button horizontally with a centered top-down
-                // layout. `horizontal_centered` cannot be used here: it allocates
-                // its child against all remaining space, which would stretch this
-                // bottom panel to fill the whole window.
-                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                    // Some vertical margin above and below the button.
-                    ui.add_space(8.0);
-                    // Match the size and font of the "Create device" button.
-                    // The button is added directly to this centered layout;
-                    // wrapping it in `ui.horizontal` would stretch to the full
-                    // panel width and defeat the centering.
-                    ui.style_mut().spacing.button_padding = (16.0, 12.0).into();
-                    if ui
-                        .add_enabled(
-                            options_valid && has_changes,
-                            egui::Button::new(egui::RichText::new("✔️Apply").heading()),
-                        )
-                        .clicked()
-                    {
+                // Center the button row (Apply left, Cancel right) by hand:
+                // `horizontal_centered` would stretch this bottom panel to the
+                // whole window, a plain `ui.horizontal` fills the panel width
+                // and left-aligns the buttons, and a justified row stretches
+                // each button across the panel. So measure both buttons and
+                // indent the row by half of the leftover width instead.
+                let cancel_pad = ui.spacing().button_padding;
+                let cancel_size = Self::measure_text(ui, "Cancel", egui::TextStyle::Body).size()
+                    + 2.0 * cancel_pad;
+                let apply_width =
+                    Self::measure_text(ui, "\u{2714}\u{fe0f}Apply", egui::TextStyle::Heading)
+                        .width()
+                        + 2.0 * APPLY_BUTTON_PADDING_X;
+                let row_width = cancel_size.x + apply_width + ui.spacing().item_spacing.x;
+                let indent = ((ui.available_width() - row_width) * 0.5).max(0.0);
+
+                // Some vertical margin above and below the button row.
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if indent > 0.0 {
+                        ui.add_space(indent);
+                    }
+                    // "Apply" on the left, matching the size and font of the
+                    // "Create device" button; enabled only when the fields are
+                    // both valid and different from the settings.
+                    ui.style_mut().spacing.button_padding =
+                        egui::vec2(APPLY_BUTTON_PADDING_X, APPLY_BUTTON_PADDING_Y);
+                    let apply_response = ui.add_enabled(
+                        options_valid && has_changes,
+                        egui::Button::new(egui::RichText::new("✔️Apply").heading()),
+                    );
+                    if apply_response.clicked() {
                         self.on_apply_options_click();
                     }
-                    ui.add_space(4.0);
+                    // "Cancel" to the right of "Apply", at its normal size and
+                    // vertically centered against it. It is placed inside a
+                    // child UI pinned to a manually computed rect, because
+                    // widgets in a row are baseline-aligned, which would
+                    // bottom-align the shorter Cancel against the taller
+                    // Apply. Inside that rect a justified row stretches the
+                    // button to fill it, and the rect is the button's own
+                    // measured size, so it looks like a normally-sized button.
+                    // It must work even when the fields are invalid, so only
+                    // differences from the settings are required.
+                    let cancel_rect = egui::Rect::from_min_size(
+                        egui::pos2(
+                            apply_response.rect.right() + ui.spacing().item_spacing.x,
+                            apply_response.rect.center().y - 0.5 * cancel_size.y,
+                        ),
+                        cancel_size,
+                    );
+                    let cancel_response = ui
+                        .scope_builder(egui::UiBuilder::new().max_rect(cancel_rect), |ui| {
+                            // Undo the Apply-only padding bump so Cancel
+                            // keeps the size that was measured for the
+                            // rect it is placed in.
+                            ui.spacing_mut().button_padding = cancel_pad;
+                            if !has_changes {
+                                // Gray, non-interactive Cancel when there
+                                // is nothing to discard.
+                                ui.disable();
+                            }
+                            ui.centered_and_justified(|ui| ui.add(egui::Button::new("Cancel")))
+                                .inner
+                        })
+                        .inner;
+                    if cancel_response.clicked() {
+                        self.on_cancel_options_click();
+                    }
                 });
+                ui.add_space(4.0);
             });
 
         egui::ScrollArea::vertical()
@@ -408,5 +461,27 @@ impl<'a> AppGUI<'a> {
     /// saved when Apply is pressed.
     fn on_default_device_name_click(&mut self) {
         self.device_name_text = DEFAULT_VIRTUAL_DEVICE_NAME.to_string();
+    }
+
+    /// Handles the single "Cancel" button click in the Options footer.
+    /// Discards pending edits by resetting the Apply-managed UI fields back
+    /// to the values currently stored in the settings; the theme needs no
+    /// reset because it is applied instantly. The combobox selection is
+    /// restored by looking up the saved output device name in the current
+    /// sink list.
+    fn on_cancel_options_click(&mut self) {
+        let settings = self.settings.borrow();
+
+        self.directory_text = settings
+            .get_wav_directory()
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        self.device_name_text = settings.virtual_device_name.clone();
+        self.restart_command_text = settings.service_restart_command.clone();
+        self.selected_sink_index =
+            Self::find_sink_index_by_name(&self.sinks, &settings.output_device)
+                .map(|idx| idx + 1) // +1 because index 0 is Auto
+                .unwrap_or(0);
     }
 }
