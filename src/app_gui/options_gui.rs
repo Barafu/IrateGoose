@@ -65,7 +65,7 @@ impl<'a> AppGUI<'a> {
                 ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                     // Some vertical margin above and below the button.
                     ui.add_space(8.0);
-                    // Match the size of the "Create device" button.
+                    // Match the size and font of the "Create device" button.
                     // The button is added directly to this centered layout;
                     // wrapping it in `ui.horizontal` would stretch to the full
                     // panel width and defeat the centering.
@@ -73,7 +73,7 @@ impl<'a> AppGUI<'a> {
                     if ui
                         .add_enabled(
                             options_valid && has_changes,
-                            egui::Button::new(egui::RichText::new("✔️Apply").strong()),
+                            egui::Button::new(egui::RichText::new("✔️Apply").heading()),
                         )
                         .clicked()
                     {
@@ -109,16 +109,17 @@ impl<'a> AppGUI<'a> {
 
                 // Show directory picker dialog
                 if let Some(selected_folder) = dialog.pick_folder() {
-                    // Update directory text field with selected path
+                    // Only update the text field; the directory is copied to
+                    // the settings and rescanned when Apply is pressed.
                     self.directory_text = selected_folder.to_string_lossy().to_string();
-                    // Automatically trigger rescan for the newly selected directory
-                    self.on_rescan_click();
                 }
             }
-            let rescan_enabled = !self.directory_text.trim().is_empty();
+            // Rescan re-reads the directory already applied in the settings;
+            // a pending path in the text field is only applied via Apply.
+            let rescan_enabled = self.settings.borrow().get_wav_directory().is_some();
             let rescan_button = ui.add_enabled(rescan_enabled, egui::Button::new("Rescan"));
             if rescan_button.clicked() {
-                self.on_rescan_click();
+                self.on_rescan_applied_click();
             }
         });
 
@@ -126,10 +127,6 @@ impl<'a> AppGUI<'a> {
 
         ui.heading("Virtual Device Name");
         ui.label("Set the name of the virtual audio device that will appear in your system audio settings:");
-
-        // Display currently configured device name
-        let current_device_name = self.settings.borrow().virtual_device_name.clone();
-        ui.label(format!("Currently configured: {}", current_device_name));
 
         ui.horizontal(|ui| {
             ui.label("Device name:");
@@ -159,7 +156,7 @@ impl<'a> AppGUI<'a> {
             ui.label("Output device:");
             // Combobox for sink selection
             let total_items = self.sinks.len() + 1; // +1 for Auto
-            let response = egui::ComboBox::from_label("")
+            egui::ComboBox::from_label("")
                 .selected_text(self.selected_sink_display_text())
                 .show_index(ui, &mut self.selected_sink_index, total_items, |i| {
                     if i == 0 {
@@ -169,18 +166,8 @@ impl<'a> AppGUI<'a> {
                         Self::sink_display_text(sink)
                     }
                 });
-            // Update settings if selection changed
-            if response.changed() {
-                let new_selection = if self.selected_sink_index == 0 {
-                    None
-                } else {
-                    self.sinks
-                        .get(self.selected_sink_index - 1)
-                        .and_then(|s| s.get("node.name").cloned())
-                };
-                self.settings.borrow_mut().output_device = new_selection;
-                self.write_settings();
-            }
+            // The selection is kept only in the UI state (selected_sink_index);
+            // it is copied to the settings when Apply is pressed.
             // Reload button
             if ui.button("Reload").clicked() {
                 self.refresh_sinks();
@@ -193,14 +180,6 @@ impl<'a> AppGUI<'a> {
         ui.label(
             "Command used to restart the audio services when the device is created or removed:",
         );
-
-        // Display currently configured restart command; empty means no restart.
-        let current_command = self.settings.borrow().service_restart_command.clone();
-        if current_command.is_empty() {
-            ui.label("Currently configured: (none, services will not be restarted)");
-        } else {
-            ui.label(format!("Currently configured: {}", current_command));
-        }
 
         ui.horizontal(|ui| {
             ui.label("Command:");
@@ -272,33 +251,46 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Validates all editable Options values before they are applied.
-    /// Returns false when any value is invalid. Currently this only requires
-    /// the device name to be non-empty; the restart command may be empty,
-    /// which means "never restart the services".
+    /// Returns false when any value is invalid: the IR files directory and
+    /// the device name must be non-empty; the restart command may be empty,
+    /// which means "never restart the services". The directory is only
+    /// checked for existence and readability when Apply is pressed.
     fn validate_options(&self) -> bool {
-        !self.device_name_text.trim().is_empty()
+        !self.directory_text.trim().is_empty() && !self.device_name_text.trim().is_empty()
     }
 
     /// Whether the fields applied by the "Apply" button differ from the
-    /// current application settings. Apply only persists the virtual device
-    /// name and the service restart command, so only these two fields are
-    /// compared (the directory, output device and theme are persisted
-    /// immediately by their own controls).
+    /// current application settings. Apply persists the IR files directory,
+    /// the virtual device name, the service restart command and the output
+    /// device (only the theme is applied immediately by its own control).
     ///
     /// The field values are trimmed before comparison because
     /// [`Self::on_apply_options_click`] trims them when writing, so whitespace
     ///-only differences are not real changes.
     fn has_unapplied_changes(&self) -> bool {
         let settings = self.settings.borrow();
-        self.device_name_text.trim() != settings.virtual_device_name
+
+        let dir_text = self.directory_text.trim();
+        let dir_changed = match settings.get_wav_directory() {
+            Some(dir) => dir.to_string_lossy().as_ref() != dir_text,
+            None => !dir_text.is_empty(),
+        };
+
+        dir_changed
+            || self.selected_output_device_name() != settings.output_device
+            || self.device_name_text.trim() != settings.virtual_device_name
             || self.restart_command_text.trim() != settings.service_restart_command
     }
 
     /// Handles the single "Apply" button click in the Options footer.
-    /// Collects all option text fields and writes them to the settings,
-    /// then saves the settings to disk once.
+    /// Collects all option fields, verifies that the IR files directory is
+    /// usable, then writes the directory, device name, restart command and
+    /// output device to the settings and saves once. When the directory
+    /// changed, the file index is rescanned.
     ///
-    /// Does nothing when the fields are invalid ([`Self::validate_options`]).
+    /// Does nothing when the fields are invalid ([`Self::validate_options`]),
+    /// and cancels without saving when the directory does not exist or is
+    /// not readable.
     fn on_apply_options_click(&mut self) {
         if !self.validate_options() {
             error!("Options tab is in invalid state!");
@@ -307,17 +299,69 @@ impl<'a> AppGUI<'a> {
 
         let device_name = self.device_name_text.trim().to_string();
         let restart_command = self.restart_command_text.trim().to_string();
+        let dir_text = self.directory_text.trim().to_string();
+        let dir_path = PathBuf::from(&dir_text);
+
+        // Verify the directory exists and is readable before applying any
+        // change; on failure the whole apply is cancelled.
+        if !dir_path.exists() {
+            self.show_modal(
+                "Directory Not Found",
+                "The specified directory does not exist.",
+            );
+            return;
+        }
+        if !dir_path.is_dir() {
+            self.show_modal("Not a Directory", "The specified path is not a directory.");
+            return;
+        }
+        if let Err(e) = std::fs::read_dir(&dir_path) {
+            self.show_modal(
+                "Directory Not Readable",
+                &format!("The specified directory cannot be read: {}", e),
+            );
+            return;
+        }
+
+        // Whether the directory differs from the applied one; computed before
+        // the settings are overwritten below.
+        let dir_changed = match self.settings.borrow().get_wav_directory() {
+            Some(dir) => dir.to_string_lossy().as_ref() != dir_text,
+            None => true,
+        };
 
         // Write every collected field, then save once.
         {
             let mut settings = self.settings.borrow_mut();
-            settings.virtual_device_name = device_name.clone();
-            settings.service_restart_command = restart_command.clone();
+            settings.virtual_device_name = device_name;
+            settings.service_restart_command = restart_command;
+            settings.output_device = self.selected_output_device_name();
         }
 
         self.write_settings();
 
         info!("Settings changed");
+
+        // When the directory changed, apply it and rescan the file index.
+        // safe_rescan persists the new directory crash-safely itself.
+        if dir_changed {
+            self.settings.borrow_mut().set_wav_directory(Some(dir_path));
+            match self.safe_rescan() {
+                Ok(_) => {
+                    info!(
+                        "Scanned IR directory: {} ({} files found)",
+                        dir_text,
+                        self.all_wav_index.len()
+                    );
+                }
+                Err(e) => {
+                    self.show_modal(
+                        "Rescan Error",
+                        &format!("Failed to rescan directory: {}", e),
+                    );
+                }
+            }
+        }
     }
 
     /// Handles the "Default" button click for virtual device name.

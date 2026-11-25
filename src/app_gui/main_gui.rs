@@ -174,11 +174,27 @@ impl<'a> AppGUI<'a> {
             .position(|s| s.get("node.name") == Some(node_name))
     }
 
+    /// Returns the node.name of the sink currently selected in the Options
+    /// combobox (resolved from its index), or None when "Auto" is selected.
+    /// This is the pending selection; it reaches the settings only when
+    /// Apply is pressed.
+    pub(crate) fn selected_output_device_name(&self) -> Option<String> {
+        if self.selected_sink_index == 0 {
+            None
+        } else {
+            self.sinks
+                .get(self.selected_sink_index - 1)
+                .and_then(|s| s.get("node.name").cloned())
+        }
+    }
+
     /// Refresh the list of sinks from ConfigManager.
-    /// If the currently selected sink (by node.name) is still present in the new list,
-    /// keep it selected; otherwise reset to Auto.
+    /// If the pending combobox selection (by node.name) is still present in
+    /// the new list, keep it selected; otherwise reset to Auto.
     pub(crate) fn refresh_sinks(&mut self) {
-        let old_selection = self.settings.borrow().output_device.clone();
+        // Keep the pending combobox selection (not the value already in the
+        // settings); the Reload button never writes settings.
+        let old_selection = self.selected_output_device_name();
         let new_sinks = match self.config_manager.list_audio_devices() {
             Ok(devices) => ConfigManager::filter_audio_sinks(&devices),
             Err(e) => {
@@ -191,18 +207,6 @@ impl<'a> AppGUI<'a> {
         self.selected_sink_index = Self::find_sink_index_by_name(&self.sinks, &old_selection)
             .map(|idx| idx + 1)
             .unwrap_or(0);
-        // If selection changed, update settings
-        let new_selection = if self.selected_sink_index == 0 {
-            None
-        } else {
-            self.sinks
-                .get(self.selected_sink_index - 1)
-                .and_then(|s| s.get("node.name").cloned())
-        };
-        if old_selection != new_selection {
-            self.settings.borrow_mut().output_device = new_selection.clone();
-            self.write_settings();
-        }
     }
 
     /// Checks if Pipewire config exists and returns the checksum if found.

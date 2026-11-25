@@ -248,7 +248,10 @@ impl<'a> AppGUI<'a> {
             ui.label("No IR files were found in the selected directory.");
             ui.label("Look at the Help tab for ways to obtain IR files.");
             ui.label("");
-            ui.hyperlink_to(" Irate Goose GitHub", "https://github.com/Barafu/IrateGoose");
+            ui.hyperlink_to(
+                " Irate Goose GitHub",
+                "https://github.com/Barafu/IrateGoose",
+            );
         } else if self.get_filtered_wav_files().len() == 0 {
             ui.label("");
             ui.label("No .wav files matching this filter were found in the directory.");
@@ -280,36 +283,16 @@ impl<'a> AppGUI<'a> {
         }
     }
 
-    /// Handles the "Rescan" button click for WAV directory.
-    pub(crate) fn on_rescan_click(&mut self) {
-        let dir_text = self.directory_text.trim().to_string();
-        if dir_text.is_empty() {
+    /// Handles the "Rescan" button click in the Options tab.
+    /// Rescans the directory currently applied in the settings; a pending
+    /// path typed into the directory text field is only applied through
+    /// the Apply button.
+    pub(crate) fn on_rescan_applied_click(&mut self) {
+        // Nothing to rescan until a directory has been applied.
+        let Some(dir) = self.settings.borrow().get_wav_directory() else {
             return;
-        }
-
-        let path = PathBuf::from(&dir_text);
-
-        // Check if directory exists and is a directory
-        if !path.exists() {
-            self.show_modal(
-                "Directory Not Found",
-                "The specified directory does not exist.",
-            );
-            return;
-        }
-
-        if !path.is_dir() {
-            self.show_modal("Not a Directory", "The specified path is not a directory.");
-            return;
-        }
-
-        // Invalidate filtered items cache
-        self.filtered_wav_index = None;
-
-        // Perform safe rescan with the new directory (safe_rescan will handle persistence)
-        // We need to set the directory in settings, but safe_rescan will temporarily set to None.
-        // However, safe_rescan expects wav_directory to already be set.
-        self.settings.borrow_mut().set_wav_directory(Some(path));
+        };
+        let dir_text = dir.to_string_lossy().to_string();
 
         match self.safe_rescan() {
             Ok(_) => {
