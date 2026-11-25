@@ -52,10 +52,9 @@ impl<'a> AppGUI<'a> {
         }
     }
 
-    /// Width for a single-line text edit in the Options tab: it stretches to
-    /// fit its displayed content (the text, or the hint while the field is
-    /// empty) plus [`TEXT_EDIT_EXTRA_WIDTH`], but never shrinks below
-    /// [`MIN_TEXT_EDIT_WIDTH`], which gives all fields the same minimum width.
+    /// Width for a single-line text edit: the displayed content (the text, or
+    /// the hint when empty) plus [`TEXT_EDIT_EXTRA_WIDTH`], never below
+    /// [`MIN_TEXT_EDIT_WIDTH`].
     fn text_edit_width(ui: &mut egui::Ui, text: &str, hint: &str) -> f32 {
         let shown = if text.is_empty() { hint } else { text };
         let content_width = Self::measure_text(ui, shown, egui::TextStyle::Body).width();
@@ -72,31 +71,21 @@ impl<'a> AppGUI<'a> {
         ui.fonts_mut(|fonts| fonts.layout_job(job)).rect
     }
 
-    /// Renders the options tab content inside a scrollable area, together with a
-    /// fixed footer panel at the bottom holding the Apply button.
-    ///
-    /// The footer panel is shown first so it claims its space; the scroll area then always fills the
-    /// remaining available space so the footer stays at a constant position and the
-    /// scrollbar only appears when the content overflows.
+    /// Renders the Options tab in a scroll area with a fixed footer at the
+    /// bottom holding the Apply and Cancel buttons. The footer is shown first
+    /// so it keeps its space and the scroll area takes the rest.
     pub(crate) fn render_options(&mut self, ui: &mut egui::Ui) {
-        // Compute the validity of all Options values before opening the
-        // panel closure; Apply is enabled only by validation and only when
-        // the Apply-managed fields actually differ from the current settings.
+        // Apply is enabled only when the fields are valid and differ from Settings.
         let options_valid = self.validate_options();
         let has_changes = self.has_unapplied_changes();
 
-        // Fixed footer panel with the Apply button. Shown inside the central
-        // area, before the scroll area, so it always keeps its space at the
-        // bottom while the scroll area takes the rest.
+        // Footer panel first so it claims its space before the scroll area.
         egui::Panel::bottom("options_footer")
             .show_separator_line(false)
             .show(ui, |ui| {
-                // Center the button row (Apply left, Cancel right) by hand:
-                // `horizontal_centered` would stretch this bottom panel to the
-                // whole window, a plain `ui.horizontal` fills the panel width
-                // and left-aligns the buttons, and a justified row stretches
-                // each button across the panel. So measure both buttons and
-                // indent the row by half of the leftover width instead.
+                // Center the row manually: egui's centered/justified layouts
+                // misbehave in a bottom panel, so measure both buttons and
+                // indent the row by half the leftover width.
                 let cancel_pad = ui.spacing().button_padding;
                 let cancel_size = Self::measure_text(ui, "Cancel", egui::TextStyle::Body).size()
                     + 2.0 * cancel_pad;
@@ -113,9 +102,7 @@ impl<'a> AppGUI<'a> {
                     if indent > 0.0 {
                         ui.add_space(indent);
                     }
-                    // "Apply" on the left, matching the size and font of the
-                    // "Create device" button; enabled only when the fields are
-                    // both valid and different from the settings.
+                    // "Apply" sized and styled like the "Create device" button.
                     ui.style_mut().spacing.button_padding =
                         egui::vec2(APPLY_BUTTON_PADDING_X, APPLY_BUTTON_PADDING_Y);
                     let apply_response = ui.add_enabled(
@@ -125,16 +112,11 @@ impl<'a> AppGUI<'a> {
                     if apply_response.clicked() {
                         self.on_apply_options_click();
                     }
-                    // "Cancel" to the right of "Apply", at its normal size and
-                    // vertically centered against it. It is placed inside a
-                    // child UI pinned to a manually computed rect, because
-                    // widgets in a row are baseline-aligned, which would
-                    // bottom-align the shorter Cancel against the taller
-                    // Apply. Inside that rect a justified row stretches the
-                    // button to fill it, and the rect is the button's own
-                    // measured size, so it looks like a normally-sized button.
-                    // It must work even when the fields are invalid, so only
-                    // differences from the settings are required.
+                    // "Cancel" pinned to a manually computed rect, vertically
+                    // centered against Apply (row widgets would baseline-align
+                    // it). The rect is Cancel's measured size, so the justified
+                    // row below cannot stretch it. Cancel must work even with
+                    // invalid fields, so only changes gate it.
                     let cancel_rect = egui::Rect::from_min_size(
                         egui::pos2(
                             apply_response.rect.right() + ui.spacing().item_spacing.x,
@@ -144,13 +126,10 @@ impl<'a> AppGUI<'a> {
                     );
                     let cancel_response = ui
                         .scope_builder(egui::UiBuilder::new().max_rect(cancel_rect), |ui| {
-                            // Undo the Apply-only padding bump so Cancel
-                            // keeps the size that was measured for the
-                            // rect it is placed in.
+                            // Undo the Apply padding bump to match the measured size.
                             ui.spacing_mut().button_padding = cancel_pad;
                             if !has_changes {
-                                // Gray, non-interactive Cancel when there
-                                // is nothing to discard.
+                                // Gray, non-interactive Cancel when nothing to discard.
                                 ui.disable();
                             }
                             ui.centered_and_justified(|ui| ui.add(egui::Button::new("Cancel")))
@@ -342,23 +321,16 @@ impl<'a> AppGUI<'a> {
             });
     }
 
-    /// Validates all editable Options values before they are applied.
-    /// Returns false when any value is invalid: the IR files directory and
-    /// the device name must be non-empty; the restart command may be empty,
-    /// which means "never restart the services". The directory is only
-    /// checked for existence and readability when Apply is pressed.
+    /// Validates the editable Options values: the directory and device name
+    /// must be non-empty; an empty restart command means "never restart".
+    /// The directory is checked for existence and readability only in Apply.
     fn validate_options(&self) -> bool {
         !self.directory_text.trim().is_empty() && !self.device_name_text.trim().is_empty()
     }
 
-    /// Whether the fields applied by the "Apply" button differ from the
-    /// current application settings. Apply persists the IR files directory,
-    /// the virtual device name, the service restart command and the output
-    /// device (only the theme is applied immediately by its own control).
-    ///
-    /// The field values are trimmed before comparison because
-    /// [`Self::on_apply_options_click`] trims them when writing, so whitespace
-    ///-only differences are not real changes.
+    /// Whether the Apply-managed fields (directory, device name, restart
+    /// command, output device) differ from the current Settings. Values are
+    /// trimmed before comparison, since Apply trims them when writing.
     fn has_unapplied_changes(&self) -> bool {
         let settings = self.settings.borrow();
 
@@ -374,15 +346,9 @@ impl<'a> AppGUI<'a> {
             || self.restart_command_text.trim() != settings.service_restart_command
     }
 
-    /// Handles the single "Apply" button click in the Options footer.
-    /// Collects all option fields, verifies that the IR files directory is
-    /// usable, then writes the directory, device name, restart command and
-    /// output device to the settings and saves once. When the directory
-    /// changed, the file index is rescanned.
-    ///
-    /// Does nothing when the fields are invalid ([`Self::validate_options`]),
-    /// and cancels without saving when the directory does not exist or is
-    /// not readable.
+    /// Handles the "Apply" click: bails out when the fields are invalid or
+    /// the IR files directory is unusable; otherwise writes the fields to
+    /// the Settings, saves once, and rescans when the directory changed.
     fn on_apply_options_click(&mut self) {
         if !self.validate_options() {
             error!("Options tab is in invalid state!");
@@ -463,12 +429,9 @@ impl<'a> AppGUI<'a> {
         self.device_name_text = DEFAULT_VIRTUAL_DEVICE_NAME.to_string();
     }
 
-    /// Handles the single "Cancel" button click in the Options footer.
-    /// Discards pending edits by resetting the Apply-managed UI fields back
-    /// to the values currently stored in the settings; the theme needs no
-    /// reset because it is applied instantly. The combobox selection is
-    /// restored by looking up the saved output device name in the current
-    /// sink list.
+    /// Handles the "Cancel" click: resets the Apply-managed UI fields back
+    /// to the current Settings. The theme needs no reset (applied instantly);
+    /// the sink combobox is restored by name from the saved output device.
     fn on_cancel_options_click(&mut self) {
         let settings = self.settings.borrow();
 
