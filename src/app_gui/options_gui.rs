@@ -40,14 +40,17 @@ impl<'a> AppGUI<'a> {
     }
 
     /// Renders the options tab content inside a scrollable area, together with a
-    /// fixed footer panel at the bottom holding the Apply button. The footer panel
-    /// is shown first so it claims its space; the scroll area then always fills the
+    /// fixed footer panel at the bottom holding the Apply button.
+    ///
+    /// The footer panel is shown first so it claims its space; the scroll area then always fills the
     /// remaining available space so the footer stays at a constant position and the
     /// scrollbar only appears when the content overflows.
     pub(crate) fn render_options(&mut self, ui: &mut egui::Ui) {
         // Compute the validity of all Options values before opening the
-        // panel closure; Apply is enabled by validation.
+        // panel closure; Apply is enabled only by validation and only when
+        // the Apply-managed fields actually differ from the current settings.
         let options_valid = self.validate_options();
+        let has_changes = self.has_unapplied_changes();
 
         // Fixed footer panel with the Apply button. Shown inside the central
         // area, before the scroll area, so it always keeps its space at the
@@ -69,7 +72,7 @@ impl<'a> AppGUI<'a> {
                     ui.style_mut().spacing.button_padding = (16.0, 12.0).into();
                     if ui
                         .add_enabled(
-                            options_valid,
+                            options_valid && has_changes,
                             egui::Button::new(egui::RichText::new("✔️Apply").strong()),
                         )
                         .clicked()
@@ -274,6 +277,21 @@ impl<'a> AppGUI<'a> {
     /// which means "never restart the services".
     fn validate_options(&self) -> bool {
         !self.device_name_text.trim().is_empty()
+    }
+
+    /// Whether the fields applied by the "Apply" button differ from the
+    /// current application settings. Apply only persists the virtual device
+    /// name and the service restart command, so only these two fields are
+    /// compared (the directory, output device and theme are persisted
+    /// immediately by their own controls).
+    ///
+    /// The field values are trimmed before comparison because
+    /// [`Self::on_apply_options_click`] trims them when writing, so whitespace
+    ///-only differences are not real changes.
+    fn has_unapplied_changes(&self) -> bool {
+        let settings = self.settings.borrow();
+        self.device_name_text.trim() != settings.virtual_device_name
+            || self.restart_command_text.trim() != settings.service_restart_command
     }
 
     /// Handles the single "Apply" button click in the Options footer.
