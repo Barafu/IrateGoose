@@ -7,6 +7,14 @@ use super::AppGUI;
 use crate::app_gui::theme::resolve_theme;
 use crate::settings::{DEFAULT_SERVICE_RESTART_COMMAND, DEFAULT_VIRTUAL_DEVICE_NAME};
 
+/// Common minimum width (in points) of the single-line text edits in the
+/// Options tab, so all fields look consistent when empty or short.
+const MIN_TEXT_EDIT_WIDTH: f32 = 240.0;
+
+/// Extra width added on top of the displayed content when stretching a text
+/// edit, so the caret at the end of the text never sits on the very edge.
+const TEXT_EDIT_EXTRA_WIDTH: f32 = 24.0;
+
 impl<'a> AppGUI<'a> {
     /// Generate display text for a sink (two lines).
     /// First line: node.nick if present, else node.name.
@@ -37,6 +45,26 @@ impl<'a> AppGUI<'a> {
         } else {
             "Invalid".to_string()
         }
+    }
+
+    /// Width for a single-line text edit in the Options tab: it stretches to
+    /// fit its displayed content (the text, or the hint while the field is
+    /// empty) plus [`TEXT_EDIT_EXTRA_WIDTH`], but never shrinks below
+    /// [`MIN_TEXT_EDIT_WIDTH`], which gives all fields the same minimum width.
+    fn text_edit_width(ui: &mut egui::Ui, text: &str, hint: &str) -> f32 {
+        let shown = if text.is_empty() { hint } else { text };
+        // Measure the text with the same font the text edit renders with
+        // (body style), allowing an unbounded wrap width so it stays on one
+        // line.
+        let style = ui.style();
+        let job = egui::text::LayoutJob::simple(
+            shown.to_string(),
+            style.text_styles[&egui::TextStyle::Body].clone(),
+            style.visuals.widgets.noninteractive.fg_stroke.color,
+            f32::INFINITY,
+        );
+        let content_width = ui.fonts_mut(|fonts| fonts.layout_job(job)).rect.width();
+        (content_width + TEXT_EDIT_EXTRA_WIDTH).max(MIN_TEXT_EDIT_WIDTH)
     }
 
     /// Renders the options tab content inside a scrollable area, together with a
@@ -91,8 +119,13 @@ impl<'a> AppGUI<'a> {
 
         ui.horizontal(|ui| {
             ui.label("Directory:");
+            // Compute the width before the mutable borrow of the text starts.
+            let hint = "Path to IR files";
+            let width = Self::text_edit_width(ui, &self.directory_text, hint);
             ui.add(
-                egui::TextEdit::singleline(&mut self.directory_text).hint_text("Path to IR files"),
+                egui::TextEdit::singleline(&mut self.directory_text)
+                    .hint_text(hint)
+                    .desired_width(width),
             );
             if ui.button("Select").clicked() {
                 // Create file dialog for directory selection
@@ -130,9 +163,12 @@ impl<'a> AppGUI<'a> {
 
         ui.horizontal(|ui| {
             ui.label("Device name:");
+            let hint = "Virtual device name";
+            let width = Self::text_edit_width(ui, &self.device_name_text, hint);
             ui.add(
                 egui::TextEdit::singleline(&mut self.device_name_text)
-                    .hint_text("Virtual device name"),
+                    .hint_text(hint)
+                    .desired_width(width),
             );
 
             let default_value = DEFAULT_VIRTUAL_DEVICE_NAME;
@@ -183,9 +219,12 @@ impl<'a> AppGUI<'a> {
 
         ui.horizontal(|ui| {
             ui.label("Command:");
+            let hint = "No command set";
+            let width = Self::text_edit_width(ui, &self.restart_command_text, hint);
             ui.add(
                 egui::TextEdit::singleline(&mut self.restart_command_text)
-                    .hint_text("Program and its arguments separated by spaces"),
+                    .hint_text(hint)
+                    .desired_width(width),
             );
 
 
