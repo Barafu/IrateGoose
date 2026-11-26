@@ -42,8 +42,8 @@ Irate Goose requires impulse response files in WAV format compatible with HeSuVi
 
 1. **Download full collection**: Get IR files from the Internet:
 
-   - Small collection (27 MB) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_small.tar.zstd)
-   - Full collection (153 MB, includes Small) [Link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
+   - Small collection (27 MB) [Link](https://s3.ru1.storage.beget.cloud/d1952d03d5d6-hrir-collection/HRIR_collection_small.tar.zstd)
+   - Full collection (153 MB, includes Small) [Link](https://s3.ru1.storage.beget.cloud/d1952d03d5d6-hrir-collection/HRIR_collection_full.tar.zstd)
    - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
 
 2. **Extract from HeSuVi**: If you already have HeSuVi installed, you can use the IR files from its `HeSuVi/Common/` directory. These are typically located at: `C:\Program Files\EqualizerAPO\config\HeSuVi\Common\`. You can copy the WAV files from there to use with Irate Goose.

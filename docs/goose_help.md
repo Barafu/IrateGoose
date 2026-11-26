@@ -11,8 +11,8 @@ This is quick reminder of application's basics. Full help is available on the ho
 
 ## Download IR files
 
-- Small collection (27Mb) [Direct link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_small.tar.zstd)
-- Full collection (153Mb, includes Small) [Direct link](https://d1952d03d5d6-hrir-repository.s3.ru1.storage.beget.cloud/HRIR_collection_full.tar.zstd)
+- Small collection (27Mb) [Direct link](https://s3.ru1.storage.beget.cloud/d1952d03d5d6-hrir-collection/HRIR_collection_small.tar.zstd)
+- Full collection (153Mb, includes Small) [Direct link](https://s3.ru1.storage.beget.cloud/d1952d03d5d6-hrir-collection/HRIR_collection_full.tar.zstd)
 - Alternative link (mega.nz, if links above don't work) [Link](https://mega.nz/folder/zPx2jAxK#icrUEYHI6St-7m8nUgqcrg)
 
 ## Interface overview
@@ -67,5 +67,3 @@ No application icon?
 
 Can't find WAV files?
 - Set WAV folder on Options tab
-
-
